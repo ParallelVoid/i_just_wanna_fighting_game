@@ -104,12 +104,13 @@ The finished combat simulation should operate at a fixed 60 frames per second wi
 - Unity 2022.3.37f1
 - Built-in render pipeline
 - Legacy Unity input axes plus explicit keyboard/gamepad-key checks
-- `SampleScene` is the current test scene
+- `SampleScene` is the passive-dummy test scene
+- `TwoPlayerSampleScene` is the shared-keyboard local versus scene
 
 ### Current scene contents
 
 - Textured Jin Kazama placeholder model
-- Capsule opponent used as the movement/camera target
+- Passive second Jin used as the movement/camera target and attack dummy
 - Flat eight-sided ring-out platform with matching octagonal bounds
 - Opponent-relative movement
 - Dynamic 3D-fighter camera
@@ -136,6 +137,23 @@ The finished combat simulation should operate at a fixed 60 frames per second wi
 
 Important control rule: arrow keys are attacks, not movement. This preserves the Buriki-style division between movement buttons and attack directions.
 
+### Two-player scene controls
+
+Open `Assets/Scenes/TwoPlayerSampleScene.unity` for local play on one keyboard. Both fighters have the complete prototype movement and attack set:
+
+| Action | Player 1 | Player 2 |
+|---|---|---|
+| Back / Forward | `A / D` | `J / L` |
+| Sidestep | `W / S` | `I / K` |
+| Attack Back / Forward | Left / Right Arrow | `F / H` |
+| High / Low attack | Up / Down Arrow | `T / G` |
+| Block | `A + D` | `J + L` |
+| Run | Double-tap `D` | Double-tap `L` |
+| Backdash | Double-tap `A` | Double-tap `J` |
+| Stepping teep | Hold `D`, Left → Neutral → Right | Hold `L`, `F` → Neutral → `H` |
+
+Both Jins can attack, accumulate damage, recoil, suffer the teep knockdown, and ring out. Player 1's condition monitor is on the top-left and Player 2's is on the top-right.
+
 ### Current movement behavior
 
 - Forward and backward are always relative to the opponent.
@@ -148,6 +166,7 @@ Important control rule: arrow keys are attacks, not movement. This preserves the
 - Backdash speed: 5.4 world units per second at its peak.
 - Backdash duration: 0.32 seconds.
 - Blocking has priority over normal movement and directional attacks.
+- Each fighter has a `0.42`-unit ground-plane pushbox radius, maintaining `0.84` units of minimum center spacing while still allowing circular sidesteps.
 
 ### Current attack behavior
 
@@ -167,7 +186,7 @@ The teep command must be completed within 0.42 seconds. It demonstrates how move
 Every prototype attack now has an opponent-relative box hit volume with a short active window matched to the procedural pose. Jin's `Show Hitboxes` Inspector checkbox controls the runtime visualization:
 
 - Red translucent box: the attack is currently active and has not connected.
-- Green translucent box: the active attack connected with the prototype opponent's capsule hurt volume.
+- Green translucent box: the active attack connected with the prototype opponent's capsule-shaped hurt volume.
 - Hidden: startup, recovery, idle, or `Show Hitboxes` is disabled.
 
 Contact is latched once per attack. This is deliberately still a diagnostic layer: hit reactions, block reactions, knockback, hit stop, and frame-data assets remain future work.
@@ -176,7 +195,7 @@ Contact is latched once per attack. This is deliberately still a diagnostic laye
 
 The prototype opponent uses a Buriki One-inspired accumulated-damage system instead of a conventional bar that empties from full health. Successful attacks add damage toward and beyond a 100% danger reference:
 
-| Attack | Accumulated damage |
+| Attack | Base accumulated damage |
 |---|---:|
 | Straight punch | 8% |
 | High kick | 16% |
@@ -185,7 +204,11 @@ The prototype opponent uses a Buriki One-inspired accumulated-damage system inst
 
 The top-right monitor presents the condition as a continuously moving sinusoidal waveform, similar in spirit to the classic Resident Evil condition display. It transitions from green at little or no accumulated damage through yellow to red at 100% or more. The pulse accelerates as damage approaches the danger threshold. A ring-out reset clears accumulated damage back to 0%.
 
-For immediate prototype feedback, the capsule dummy flashes white, leans away from the strike, compresses slightly, and slides backward on confirmed contact. Stronger attacks produce a larger reaction. The stepping teep causes a dedicated knockdown: the dummy is pushed back, falls onto its side, remains grounded briefly, and then recovers. This is a presentation reaction rather than a final hitstun or physics system. Ring-out resets also clear any reaction in progress.
+Actual damage rises with the defender's existing accumulated percentage. The multiplier scales linearly from `1.0x` at 0% to `1.75x` at 100% and remains capped at `1.75x` beyond that point. This makes later clean hits increase the percentage faster than early hits.
+
+The high kick and stepping teep are strong finishers. Weak attacks may build the opponent to or beyond 100%, but only a confirmed strong finisher that brings the defender to 100% or more wins the match. The loser is knocked down, both controls freeze, a winner message is shown for 2.25 seconds, and then positions, damage, reactions, and the timer reset for another round.
+
+For immediate prototype feedback, the passive second Jin flashes white, leans away from the strike, compresses slightly, and slides backward on confirmed contact. Stronger attacks produce a larger reaction. The stepping teep causes a dedicated knockdown: the dummy is pushed back, falls onto its side, remains grounded briefly, and then recovers. This is a presentation reaction rather than a final hitstun or physics system. Ring-out resets also clear any reaction in progress.
 
 ### Optional round countdown
 
@@ -261,13 +284,13 @@ Recommended fix:
 
 Movement and attacks currently use seconds and `Update()`. A competitive fighting game should move combat decisions into a fixed 60 Hz simulation and express startup, active, and recovery in frames.
 
-### There is no second playable fighter
+### The two-player scene is keyboard-only
 
-The capsule opponent cannot move, attack, block, take damage, or be controlled. Two-player interaction must exist before matchup or variation design can be evaluated.
+`SampleScene` keeps the second Jin passive for focused testing. `TwoPlayerSampleScene` enables both fighters, but device assignment and separate gamepad profiles are not implemented yet.
 
 ### There are no real combat collisions
 
-There are currently no authored hurtboxes, hitboxes, throw boxes, proximity checks, guard levels, or pushboxes.
+The current hitboxes, capsule-shaped hurt volumes, and circular fighter pushboxes are procedural prototype diagnostics rather than authored move data. Throw boxes and guard-level collision rules are not implemented.
 
 ## Current project structure
 
@@ -284,7 +307,8 @@ Assets/
 │       ├── PrototypeRingOutReset.cs
 │       └── TekkenPrototypeCamera.cs
 ├── Scenes/
-│   └── SampleScene.unity
+│   ├── SampleScene.unity
+│   └── TwoPlayerSampleScene.unity
 └── jin-kazama/
     ├── source/
     └── textures/
@@ -334,7 +358,7 @@ Editor-only scene generator that:
 
 - Creates and assigns body, face, and mouth materials
 - Instantiates and scales the Jin model
-- Creates the opponent capsule and platform
+- Creates the passive-dummy scene and a duplicated local two-player version
 - Configures the camera and lighting
 - Adds prototype components
 - Saves the prefab and scene
@@ -586,7 +610,7 @@ Acceptance criteria:
 
 - Add persistent hurtboxes to head, torso, arms, and legs.
 - Add frame-driven hitboxes to each attack.
-- Add a ground pushbox so fighters cannot overlap.
+- [x] Add a prototype ground pushbox so fighters cannot overlap.
 - Visualize all collision shapes in training mode.
 - Resolve one hit per attack unless the move explicitly supports multiple hits.
 
@@ -615,11 +639,10 @@ Acceptance criteria:
 - The defender cannot act during hitstun or blockstun.
 - Counter hits are visible in the debug UI.
 
-#### 6. Replace the capsule with a second playable fighter
+#### 6. Replace prototype input profiles with device assignment
 
-- Duplicate the initial fighter temporarily if necessary.
-- Give Player 2 an independent input source.
-- Add local two-player device assignment.
+- Replace the temporary shared-keyboard profiles with Input System actions.
+- Add local two-player keyboard/gamepad device assignment.
 - Ensure camera, ring-out, reset, and facing logic work symmetrically.
 
 Acceptance criteria:
@@ -664,7 +687,7 @@ Only after the shared combat system works:
 
 - [ ] Add hurtboxes
 - [ ] Add attack hitboxes
-- [ ] Add pushboxes
+- [x] Add prototype circular pushboxes
 - [ ] Add hit detection
 - [ ] Add health and damage
 - [ ] Add hitstop

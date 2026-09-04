@@ -19,9 +19,10 @@ namespace FightingGame.EditorTools
         private const string FaceTexturePath = "Assets/jin-kazama/textures/Ch_Jin_Face_D.png";
         private const string MouthTexturePath = "Assets/jin-kazama/textures/mouthinn_d.png";
         private const string ScenePath = "Assets/Scenes/SampleScene.unity";
+        private const string TwoPlayerScenePath = "Assets/Scenes/TwoPlayerSampleScene.unity";
         private const string PrefabPath = "Assets/Prototype/Prefabs/JinPrototype.prefab";
         private const string OctagonMeshPath = "Assets/Prototype/Materials/Prototype_Octagon.asset";
-        private const string AutoSetupSessionKey = "FightingGame.JinPrototypeSetup.v14";
+        private const string AutoSetupSessionKey = "FightingGame.JinPrototypeSetup.v17";
 
         static JinPrototypeSetup()
         {
@@ -68,9 +69,6 @@ namespace FightingGame.EditorTools
             Material faceMaterial = CreateOrUpdateMaterial("Assets/Prototype/Materials/Jin_Face.mat", faceTexture, 0.2f);
             Material mouthMaterial = CreateOrUpdateMaterial("Assets/Prototype/Materials/Jin_Mouth.mat", mouthTexture, 0.05f);
             Material groundMaterial = CreateOrUpdateGroundMaterial();
-            Material opponentMaterial = CreateOrUpdateColorMaterial(
-                "Assets/Prototype/Materials/Prototype_Opponent.mat",
-                new Color(0.28f, 0.07f, 0.08f, 1f));
 
             Scene scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
             RemoveExisting("Jin Prototype");
@@ -79,7 +77,9 @@ namespace FightingGame.EditorTools
 
             GameObject jin = (GameObject)PrefabUtility.InstantiatePrefab(modelAsset, scene);
             jin.name = "Jin Prototype";
-            jin.transform.SetPositionAndRotation(Vector3.zero, Quaternion.Euler(0f, 180f, 0f));
+            jin.transform.SetPositionAndRotation(
+                Vector3.zero,
+                Quaternion.LookRotation(Vector3.right, Vector3.up));
 
             ApplyMaterials(jin, bodyMaterial, faceMaterial, mouthMaterial);
             NormalizeCharacterSizeAndGround(jin, 1.82f);
@@ -89,11 +89,18 @@ namespace FightingGame.EditorTools
                 jin.AddComponent<JinPrototypeController>();
             }
 
-            GameObject opponent = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            GameObject opponent = (GameObject)PrefabUtility.InstantiatePrefab(modelAsset, scene);
             opponent.name = "Prototype Opponent";
-            opponent.transform.position = new Vector3(2.6f, 0.9f, 0f);
-            opponent.transform.localScale = new Vector3(0.55f, 0.9f, 0.55f);
-            opponent.GetComponent<Renderer>().sharedMaterial = opponentMaterial;
+            opponent.transform.SetPositionAndRotation(
+                new Vector3(2.6f, 0f, 0f),
+                Quaternion.LookRotation(Vector3.left, Vector3.up));
+            ApplyMaterials(opponent, bodyMaterial, faceMaterial, mouthMaterial);
+            NormalizeCharacterSizeAndGround(opponent, 1.82f);
+
+            JinPrototypeController opponentController = opponent.AddComponent<JinPrototypeController>();
+            opponentController.SetPlayerControlled(false);
+            opponentController.SetOpponent(jin.transform);
+            AddPrototypeHurtbox(opponent);
             opponent.AddComponent<PrototypeDamageHealth>();
             opponent.AddComponent<PrototypeDummyOpponent>();
 
@@ -125,16 +132,93 @@ namespace FightingGame.EditorTools
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
-            EnsureSceneInBuildSettings();
+            BuildTwoPlayerScene(scene);
+            EnsureSceneInBuildSettings(ScenePath);
+            EnsureSceneInBuildSettings(TwoPlayerScenePath);
             AssetDatabase.SaveAssets();
 
-            Selection.activeGameObject = jin;
-            Debug.Log("Jin prototype ready. Enter Play Mode and use A/D or the arrow keys.");
+            Selection.activeGameObject = GameObject.Find("Jin Prototype");
+            Debug.Log("Jin prototypes ready. The two-player scene is open; use WASD + arrows and IJKL + TFGH.");
 
             if (showConfirmation)
             {
-                EditorUtility.DisplayDialog("Jin Prototype", "The textured Jin prefab and movement sample scene were rebuilt.", "OK");
+                EditorUtility.DisplayDialog(
+                    "Jin Prototype",
+                    "The single-player scene and local two-player scene were rebuilt. TwoPlayerSampleScene is open.",
+                    "OK");
             }
+        }
+
+        private static void BuildTwoPlayerScene(Scene sourceScene)
+        {
+            if (!EditorSceneManager.SaveScene(sourceScene, TwoPlayerScenePath, true))
+            {
+                Debug.LogError("Could not create the two-player scene copy at: " + TwoPlayerScenePath);
+                return;
+            }
+
+            Scene twoPlayerScene = EditorSceneManager.OpenScene(TwoPlayerScenePath, OpenSceneMode.Single);
+            GameObject playerOne = GameObject.Find("Jin Prototype");
+            GameObject playerTwo = GameObject.Find("Prototype Opponent");
+            GameObject ground = GameObject.Find("Prototype Ground");
+            if (playerOne == null || playerTwo == null || ground == null)
+            {
+                Debug.LogError("The copied scene is missing one or more generated prototype objects.");
+                return;
+            }
+
+            JinPrototypeController playerOneController = playerOne.GetComponent<JinPrototypeController>();
+            JinPrototypeController playerTwoController = playerTwo.GetComponent<JinPrototypeController>();
+            playerOneController.SetPlayerControlled(true);
+            playerOneController.SetControlProfile(PrototypeControlProfile.PlayerOne);
+            playerOneController.SetShowControlHelp(false);
+            playerOneController.SetOpponent(playerTwo.transform);
+            playerTwoController.SetPlayerControlled(true);
+            playerTwoController.SetControlProfile(PrototypeControlProfile.PlayerTwo);
+            playerTwoController.SetShowControlHelp(false);
+            playerTwoController.SetOpponent(playerOne.transform);
+
+            if (playerOne.GetComponent<CapsuleCollider>() == null)
+            {
+                AddPrototypeHurtbox(playerOne);
+            }
+
+            PrototypeDamageHealth playerOneHealth = playerOne.GetComponent<PrototypeDamageHealth>();
+            if (playerOneHealth == null)
+            {
+                playerOneHealth = playerOne.AddComponent<PrototypeDamageHealth>();
+            }
+            playerOneHealth.ConfigureHud("PLAYER 1", false);
+
+            PrototypeDamageHealth playerTwoHealth = playerTwo.GetComponent<PrototypeDamageHealth>();
+            playerTwoHealth.ConfigureHud("PLAYER 2", true);
+
+            if (playerOne.GetComponent<PrototypeDummyOpponent>() == null)
+            {
+                playerOne.AddComponent<PrototypeDummyOpponent>();
+            }
+
+            TekkenPrototypeCamera fightCamera = Camera.main.GetComponent<TekkenPrototypeCamera>();
+            fightCamera.Configure(playerOne.transform, playerTwo.transform);
+
+            PrototypeRingOutReset ringOutReset = ground.GetComponent<PrototypeRingOutReset>();
+            ringOutReset.Configure(playerOne.transform, playerTwo.transform, ground.GetComponent<Renderer>());
+
+            EditorSceneManager.MarkSceneDirty(twoPlayerScene);
+            EditorSceneManager.SaveScene(twoPlayerScene);
+        }
+
+        private static void AddPrototypeHurtbox(GameObject character)
+        {
+            Bounds bounds = CalculateRendererBounds(character);
+            float rootScale = Mathf.Max(0.0001f, Mathf.Abs(character.transform.lossyScale.y));
+            CapsuleCollider hurtbox = character.AddComponent<CapsuleCollider>();
+            hurtbox.center = character.transform.InverseTransformPoint(bounds.center);
+            hurtbox.direction = 1;
+            hurtbox.radius = 0.3f / rootScale;
+            hurtbox.height = Mathf.Max(
+                hurtbox.radius * 2f,
+                bounds.size.y * 0.94f / rootScale);
         }
 
         private static Mesh CreateOrUpdateOctagonMesh()
@@ -247,24 +331,6 @@ namespace FightingGame.EditorTools
             if (material.HasProperty("_Glossiness"))
             {
                 material.SetFloat("_Glossiness", 0.12f);
-            }
-            EditorUtility.SetDirty(material);
-            return material;
-        }
-
-        private static Material CreateOrUpdateColorMaterial(string path, Color color)
-        {
-            Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
-            if (material == null)
-            {
-                material = new Material(Shader.Find("Standard"));
-                AssetDatabase.CreateAsset(material, path);
-            }
-
-            material.color = color;
-            if (material.HasProperty("_Glossiness"))
-            {
-                material.SetFloat("_Glossiness", 0.16f);
             }
             EditorUtility.SetDirty(material);
             return material;
@@ -383,12 +449,12 @@ namespace FightingGame.EditorTools
             }
         }
 
-        private static void EnsureSceneInBuildSettings()
+        private static void EnsureSceneInBuildSettings(string scenePath)
         {
             EditorBuildSettingsScene[] currentScenes = EditorBuildSettings.scenes;
             for (int i = 0; i < currentScenes.Length; i++)
             {
-                if (currentScenes[i].path == ScenePath)
+                if (currentScenes[i].path == scenePath)
                 {
                     currentScenes[i].enabled = true;
                     EditorBuildSettings.scenes = currentScenes;
@@ -398,7 +464,7 @@ namespace FightingGame.EditorTools
 
             EditorBuildSettingsScene[] updatedScenes = new EditorBuildSettingsScene[currentScenes.Length + 1];
             currentScenes.CopyTo(updatedScenes, 0);
-            updatedScenes[updatedScenes.Length - 1] = new EditorBuildSettingsScene(ScenePath, true);
+            updatedScenes[updatedScenes.Length - 1] = new EditorBuildSettingsScene(scenePath, true);
             EditorBuildSettings.scenes = updatedScenes;
         }
     }

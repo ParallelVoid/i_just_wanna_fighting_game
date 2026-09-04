@@ -12,11 +12,14 @@ namespace FightingGame.Prototype
         [Header("Accumulated damage")]
         [SerializeField, Min(1f)] private float dangerThreshold = 100f;
         [SerializeField, Min(0f)] private float accumulatedDamage;
+        [SerializeField, Range(0f, 2f)] private float damageGrowthAtDanger = 0.75f;
 
         [Header("Condition monitor")]
         [SerializeField, Min(0.1f)] private float calmPulseSpeed = 1.15f;
         [SerializeField, Min(0.1f)] private float dangerPulseSpeed = 5.2f;
         [SerializeField, Range(4f, 24f)] private float waveAmplitude = 13f;
+        [SerializeField] private string fighterLabel = "OPPONENT";
+        [SerializeField] private bool alignRight = true;
 
         private Texture2D pixel;
         private GUIStyle titleStyle;
@@ -24,15 +27,27 @@ namespace FightingGame.Prototype
 
         public float AccumulatedDamage { get { return accumulatedDamage; } }
         public float DamageRatio { get { return dangerThreshold > 0f ? accumulatedDamage / dangerThreshold : 0f; } }
+        public float LastDamageApplied { get; private set; }
 
-        public void ReceiveDamage(float amount)
+        public void ConfigureHud(string label, bool rightAligned)
         {
-            accumulatedDamage = Mathf.Max(0f, accumulatedDamage + amount);
+            fighterLabel = string.IsNullOrEmpty(label) ? "FIGHTER" : label.ToUpperInvariant();
+            alignRight = rightAligned;
+        }
+
+        public bool ReceiveDamage(float baseAmount, bool strongAttack)
+        {
+            float vulnerability = Mathf.Clamp01(DamageRatio);
+            float multiplier = 1f + vulnerability * damageGrowthAtDanger;
+            LastDamageApplied = Mathf.Max(0f, baseAmount) * multiplier;
+            accumulatedDamage = Mathf.Max(0f, accumulatedDamage + LastDamageApplied);
+            return strongAttack && accumulatedDamage >= dangerThreshold;
         }
 
         public void ResetDamage()
         {
             accumulatedDamage = 0f;
+            LastDamageApplied = 0f;
         }
 
         private void OnGUI()
@@ -41,7 +56,8 @@ namespace FightingGame.Prototype
 
             const float panelWidth = 320f;
             const float panelHeight = 118f;
-            Rect panel = new Rect(Screen.width - panelWidth - 18f, 18f, panelWidth, panelHeight);
+            float panelX = alignRight ? Screen.width - panelWidth - 18f : 18f;
+            Rect panel = new Rect(panelX, 18f, panelWidth, panelHeight);
             Color conditionColor = EvaluateConditionColor();
 
             Color oldColor = GUI.color;
@@ -52,7 +68,7 @@ namespace FightingGame.Prototype
 
             titleStyle.normal.textColor = conditionColor;
             valueStyle.normal.textColor = conditionColor;
-            GUI.Label(new Rect(panel.x + 12f, panel.y + 7f, 180f, 24f), "OPPONENT CONDITION", titleStyle);
+            GUI.Label(new Rect(panel.x + 12f, panel.y + 7f, 180f, 24f), fighterLabel + " CONDITION", titleStyle);
             GUI.Label(new Rect(panel.xMax - 106f, panel.y + 7f, 94f, 24f), GetConditionName(), valueStyle);
 
             Rect waveRect = new Rect(panel.x + 13f, panel.y + 36f, panel.width - 26f, 54f);

@@ -34,7 +34,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: d43e3f77e4990401fa092ae039746fe5, type: 3}
       propertyPath: m_LocalRotation.w
-      value: -0.00000004371139
+      value: 0.7071068
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: d43e3f77e4990401fa092ae039746fe5, type: 3}
       propertyPath: m_LocalRotation.x
@@ -42,7 +42,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: d43e3f77e4990401fa092ae039746fe5, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 1
+      value: 0.7071068
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: d43e3f77e4990401fa092ae039746fe5, type: 3}
       propertyPath: m_LocalRotation.z
@@ -189,6 +189,9 @@ MonoBehaviour:
   acceleration: 14
   facingSpeed: 14
   opponentTarget: {fileID: 0}
+  playerControlled: 1
+  controlProfile: 0
+  showControlHelp: 1
   doubleTapWindow: 0.24
   runSpeedMultiplier: 1.65
   backdashSpeed: 5.4

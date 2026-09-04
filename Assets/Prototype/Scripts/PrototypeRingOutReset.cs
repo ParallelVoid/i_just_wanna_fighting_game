@@ -16,9 +16,13 @@ namespace FightingGame.Prototype
         [SerializeField, Min(0.1f)] private float fallDuration = 0.7f;
         [SerializeField, Min(0f)] private float initialFallSpeed = 1.2f;
         [SerializeField, Min(0f)] private float fallAcceleration = 8f;
+        [SerializeField, Min(0.5f)] private float matchResetDelay = 2.25f;
 
         private JinPrototypeController playerController;
+        private JinPrototypeController opponentController;
+        private PrototypeDamageHealth playerHealth;
         private PrototypeDamageHealth opponentHealth;
+        private PrototypeDummyOpponent playerDummy;
         private PrototypeDummyOpponent opponentDummy;
         private TekkenPrototypeCamera fightCamera;
         private Vector3 playerSpawnPosition;
@@ -27,7 +31,14 @@ namespace FightingGame.Prototype
         private Quaternion opponentSpawnRotation;
         private Transform fallingFighter;
         private float fallingTime;
+        private string matchWinner = string.Empty;
+        private float matchEndTimer;
         private bool initialized;
+
+        public bool ControlsLockedForResult
+        {
+            get { return fallingFighter != null || !string.IsNullOrEmpty(matchWinner); }
+        }
 
         public void Configure(Transform playerTransform, Transform opponentTransform, Renderer platform)
         {
@@ -46,6 +57,16 @@ namespace FightingGame.Prototype
         {
             if (!initialized || player == null || opponent == null || platformRenderer == null)
             {
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(matchWinner))
+            {
+                matchEndTimer += Time.deltaTime;
+                if (matchEndTimer >= matchResetDelay)
+                {
+                    ResetBothFighters();
+                }
                 return;
             }
 
@@ -113,6 +134,29 @@ namespace FightingGame.Prototype
             {
                 playerController.SetControlsEnabled(false);
             }
+            if (opponentController != null)
+            {
+                opponentController.SetControlsEnabled(false);
+            }
+        }
+
+        public void DeclareWinner(string winnerLabel)
+        {
+            if (!string.IsNullOrEmpty(matchWinner))
+            {
+                return;
+            }
+
+            matchWinner = string.IsNullOrEmpty(winnerLabel) ? "FIGHTER" : winnerLabel.ToUpperInvariant();
+            matchEndTimer = 0f;
+            if (playerController != null)
+            {
+                playerController.SetControlsEnabled(false);
+            }
+            if (opponentController != null)
+            {
+                opponentController.SetControlsEnabled(false);
+            }
         }
 
         private void ResetBothFighters()
@@ -126,11 +170,24 @@ namespace FightingGame.Prototype
             if (playerController != null)
             {
                 playerController.ResetRuntimeState();
-                playerController.SetControlsEnabled(true);
+                playerController.SetControlsEnabled(playerController.PlayerControlled);
+            }
+            if (opponentController != null)
+            {
+                opponentController.ResetRuntimeState();
+                opponentController.SetControlsEnabled(opponentController.PlayerControlled);
+            }
+            if (playerHealth != null)
+            {
+                playerHealth.ResetDamage();
             }
             if (opponentHealth != null)
             {
                 opponentHealth.ResetDamage();
+            }
+            if (playerDummy != null)
+            {
+                playerDummy.ResetReaction();
             }
             if (opponentDummy != null)
             {
@@ -143,6 +200,8 @@ namespace FightingGame.Prototype
 
             fallingFighter = null;
             fallingTime = 0f;
+            matchWinner = string.Empty;
+            matchEndTimer = 0f;
         }
 
         private void CaptureSpawnState()
@@ -158,7 +217,10 @@ namespace FightingGame.Prototype
             opponentSpawnPosition = opponent.position;
             opponentSpawnRotation = opponent.rotation;
             playerController = player.GetComponent<JinPrototypeController>();
+            opponentController = opponent.GetComponent<JinPrototypeController>();
+            playerHealth = player.GetComponent<PrototypeDamageHealth>();
             opponentHealth = opponent.GetComponent<PrototypeDamageHealth>();
+            playerDummy = player.GetComponent<PrototypeDummyOpponent>();
             opponentDummy = opponent.GetComponent<PrototypeDummyOpponent>();
             fightCamera = FindObjectOfType<TekkenPrototypeCamera>();
             initialized = true;
@@ -178,7 +240,7 @@ namespace FightingGame.Prototype
 
         private void OnGUI()
         {
-            if (fallingFighter == null)
+            if (fallingFighter == null && string.IsNullOrEmpty(matchWinner))
             {
                 return;
             }
@@ -187,8 +249,11 @@ namespace FightingGame.Prototype
             style.alignment = TextAnchor.MiddleCenter;
             style.fontSize = 32;
             style.fontStyle = FontStyle.Bold;
-            style.normal.textColor = new Color(1f, 0.35f, 0.2f, 1f);
-            GUI.Label(new Rect(0f, Screen.height * 0.18f, Screen.width, 50f), "RING OUT", style);
+            style.normal.textColor = string.IsNullOrEmpty(matchWinner)
+                ? new Color(1f, 0.35f, 0.2f, 1f)
+                : new Color(1f, 0.86f, 0.12f, 1f);
+            string message = string.IsNullOrEmpty(matchWinner) ? "RING OUT" : matchWinner + " WINS";
+            GUI.Label(new Rect(0f, Screen.height * 0.18f, Screen.width, 50f), message, style);
         }
     }
 }

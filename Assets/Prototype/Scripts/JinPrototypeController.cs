@@ -4,6 +4,12 @@ using UnityEngine;
 
 namespace FightingGame.Prototype
 {
+    public enum PrototypeControlProfile
+    {
+        PlayerOne,
+        PlayerTwo
+    }
+
     /// <summary>
     /// Small, dependency-free controller used to evaluate the imported Jin model.
     /// It provides opponent-relative movement, procedural posing, and directional attacks.
@@ -24,8 +30,11 @@ namespace FightingGame.Prototype
         [Header("Movement")]
         [SerializeField, Min(0.1f)] private float moveSpeed = 2.25f;
         [SerializeField, Min(0f)] private float acceleration = 14f;
-        [SerializeField, Min(0f)] private float facingSpeed = 14f;
         [SerializeField] private Transform opponentTarget;
+        [SerializeField] private bool playerControlled = true;
+        [SerializeField] private PrototypeControlProfile controlProfile = PrototypeControlProfile.PlayerOne;
+        [SerializeField] private bool showControlHelp = true;
+        [SerializeField, Min(0.1f)] private float pushboxRadius = 0.42f;
 
         [Header("Movement techniques")]
         [SerializeField, Range(0.1f, 0.5f)] private float doubleTapWindow = 0.24f;
@@ -86,6 +95,8 @@ namespace FightingGame.Prototype
         private readonly Collider[] hitboxResults = new Collider[16];
         private PrototypeDamageHealth opponentHealth;
         private PrototypeDummyOpponent opponentDummy;
+        private PrototypeDummyOpponent selfReaction;
+        private PrototypeRingOutReset matchFlow;
 
         public float MoveInput { get; private set; }
         public float SideInput { get; private set; }
@@ -93,6 +104,7 @@ namespace FightingGame.Prototype
         public bool IsRunning { get { return isRunning; } }
         public bool IsBlocking { get { return isBlocking; } }
         public bool IsBackdashing { get { return backdashTimer > 0f; } }
+        public bool PlayerControlled { get { return playerControlled; } }
         private float CurrentPlanarSpeed { get { return new Vector2(currentSpeed, currentSideSpeed).magnitude; } }
 
         public void SetOpponent(Transform target)
@@ -100,6 +112,23 @@ namespace FightingGame.Prototype
             opponentTarget = target;
             opponentHealth = FindOpponentHealth(target);
             opponentDummy = FindOpponentDummy(target);
+            SnapFacingToOpponent();
+        }
+
+        public void SetPlayerControlled(bool enabled)
+        {
+            playerControlled = enabled;
+            SetControlsEnabled(enabled);
+        }
+
+        public void SetControlProfile(PrototypeControlProfile profile)
+        {
+            controlProfile = profile;
+        }
+
+        public void SetShowControlHelp(bool visible)
+        {
+            showControlHelp = visible;
         }
 
         public void SetControlsEnabled(bool enabled)
@@ -139,9 +168,28 @@ namespace FightingGame.Prototype
 
         private void Awake()
         {
+            controlsEnabled = playerControlled;
+            SnapFacingToOpponent();
             animator = GetComponentInChildren<Animator>();
+            selfReaction = GetComponent<PrototypeDummyOpponent>();
+            matchFlow = FindObjectOfType<PrototypeRingOutReset>();
             CacheFallbackRig();
             TryInitializeHumanoidPose();
+        }
+
+        private void SnapFacingToOpponent()
+        {
+            if (opponentTarget == null)
+            {
+                return;
+            }
+
+            Vector3 fightForward = opponentTarget.position - transform.position;
+            fightForward.y = 0f;
+            if (fightForward.sqrMagnitude > 0.0001f)
+            {
+                transform.rotation = Quaternion.LookRotation(fightForward.normalized, Vector3.up);
+            }
         }
 
         private void OnEnable()
@@ -156,13 +204,20 @@ namespace FightingGame.Prototype
         {
             if (!controlsEnabled)
             {
+                if (!playerControlled && (selfReaction == null || !selfReaction.IsReacting))
+                {
+                    SnapFacingToOpponent();
+                }
                 return;
             }
 
-            bool forwardHeld = Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.JoystickButton5);
-            bool backwardHeld = Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.JoystickButton4);
-            bool forwardPressed = Input.GetKeyDown(KeyCode.D) || Input.GetKeyDown(KeyCode.JoystickButton5);
-            bool backwardPressed = Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.JoystickButton4);
+            KeyCode forwardKey = controlProfile == PrototypeControlProfile.PlayerOne ? KeyCode.D : KeyCode.L;
+            KeyCode backwardKey = controlProfile == PrototypeControlProfile.PlayerOne ? KeyCode.A : KeyCode.J;
+            bool useGamepad = controlProfile == PrototypeControlProfile.PlayerOne;
+            bool forwardHeld = Input.GetKey(forwardKey) || (useGamepad && Input.GetKey(KeyCode.JoystickButton5));
+            bool backwardHeld = Input.GetKey(backwardKey) || (useGamepad && Input.GetKey(KeyCode.JoystickButton4));
+            bool forwardPressed = Input.GetKeyDown(forwardKey) || (useGamepad && Input.GetKeyDown(KeyCode.JoystickButton5));
+            bool backwardPressed = Input.GetKeyDown(backwardKey) || (useGamepad && Input.GetKeyDown(KeyCode.JoystickButton4));
 
             UpdateMovementGestures(forwardHeld, backwardHeld, forwardPressed, backwardPressed);
             isBlocking = forwardHeld && backwardHeld && currentAttack == PrototypeAttack.None && !IsBackdashing;
@@ -187,8 +242,10 @@ namespace FightingGame.Prototype
             SideInput = 0f;
             if (!isBlocking && !IsBackdashing)
             {
-                if (Input.GetKey(KeyCode.W)) SideInput += 1f;
-                if (Input.GetKey(KeyCode.S)) SideInput -= 1f;
+                KeyCode sidePositiveKey = controlProfile == PrototypeControlProfile.PlayerOne ? KeyCode.W : KeyCode.I;
+                KeyCode sideNegativeKey = controlProfile == PrototypeControlProfile.PlayerOne ? KeyCode.S : KeyCode.K;
+                if (Input.GetKey(sidePositiveKey)) SideInput += 1f;
+                if (Input.GetKey(sideNegativeKey)) SideInput -= 1f;
             }
 
             if (currentAttack != PrototypeAttack.None)
@@ -246,19 +303,10 @@ namespace FightingGame.Prototype
             // producing an arc around the opponent instead of a flat world-Z slide.
             Vector3 sidestepDirection = Vector3.Cross(fightForward, Vector3.up).normalized;
             position += (fightForward * currentSpeed + sidestepDirection * currentSideSpeed) * Time.deltaTime;
+            position = ResolveFighterSeparation(position);
             transform.position = position;
 
-            if (opponentTarget != null)
-            {
-                Vector3 updatedFightForward = opponentTarget.position - position;
-                updatedFightForward.y = 0f;
-                if (updatedFightForward.sqrMagnitude > 0.0001f)
-                {
-                    Quaternion targetRotation = Quaternion.LookRotation(updatedFightForward.normalized, Vector3.up);
-                    float rotationBlend = 1f - Mathf.Exp(-facingSpeed * Time.deltaTime);
-                    transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationBlend);
-                }
-            }
+            SnapFacingToOpponent();
 
             if (CurrentPlanarSpeed > 0.03f)
             {
@@ -266,6 +314,29 @@ namespace FightingGame.Prototype
             }
 
             UpdateAttackHitbox();
+        }
+
+        private Vector3 ResolveFighterSeparation(Vector3 proposedPosition)
+        {
+            if (opponentTarget == null)
+            {
+                return proposedPosition;
+            }
+
+            Vector3 separation = proposedPosition - opponentTarget.position;
+            separation.y = 0f;
+            float minimumDistance = pushboxRadius * 2f;
+            if (separation.sqrMagnitude >= minimumDistance * minimumDistance)
+            {
+                return proposedPosition;
+            }
+
+            Vector3 separationDirection = separation.sqrMagnitude > 0.0001f
+                ? separation.normalized
+                : -transform.forward;
+            Vector3 correctedPosition = opponentTarget.position + separationDirection * minimumDistance;
+            correctedPosition.y = proposedPosition.y;
+            return correctedPosition;
         }
 
         private void UpdateMovementGestures(bool forwardHeld, bool backwardHeld, bool forwardPressed, bool backwardPressed)
@@ -357,13 +428,28 @@ namespace FightingGame.Prototype
         private Vector2 ReadAttackDirection()
         {
             Vector2 keyboardDirection = Vector2.zero;
-            if (Input.GetKey(KeyCode.RightArrow)) keyboardDirection.x += 1f;
-            if (Input.GetKey(KeyCode.LeftArrow)) keyboardDirection.x -= 1f;
-            if (Input.GetKey(KeyCode.UpArrow)) keyboardDirection.y += 1f;
-            if (Input.GetKey(KeyCode.DownArrow)) keyboardDirection.y -= 1f;
+            if (controlProfile == PrototypeControlProfile.PlayerOne)
+            {
+                if (Input.GetKey(KeyCode.RightArrow)) keyboardDirection.x += 1f;
+                if (Input.GetKey(KeyCode.LeftArrow)) keyboardDirection.x -= 1f;
+                if (Input.GetKey(KeyCode.UpArrow)) keyboardDirection.y += 1f;
+                if (Input.GetKey(KeyCode.DownArrow)) keyboardDirection.y -= 1f;
+            }
+            else
+            {
+                if (Input.GetKey(KeyCode.H)) keyboardDirection.x += 1f;
+                if (Input.GetKey(KeyCode.F)) keyboardDirection.x -= 1f;
+                if (Input.GetKey(KeyCode.T)) keyboardDirection.y += 1f;
+                if (Input.GetKey(KeyCode.G)) keyboardDirection.y -= 1f;
+            }
             if (keyboardDirection.sqrMagnitude > 0f)
             {
                 return Vector2.ClampMagnitude(keyboardDirection, 1f);
+            }
+
+            if (controlProfile == PrototypeControlProfile.PlayerTwo)
+            {
+                return Vector2.zero;
             }
 
             // Ignore the legacy keyboard contribution to these axes while WASD is held;
@@ -441,16 +527,33 @@ namespace FightingGame.Prototype
                 }
 
                 float damage = GetAttackDamage();
+                bool strongAttack = currentAttack == PrototypeAttack.HighKick ||
+                                    currentAttack == PrototypeAttack.StepTeep;
+                bool matchWon = false;
                 if (opponentHealth != null)
                 {
-                    opponentHealth.ReceiveDamage(damage);
+                    matchWon = opponentHealth.ReceiveDamage(damage, strongAttack);
                 }
                 if (opponentDummy != null)
                 {
                     opponentDummy.ReactToHit(
                         transform.forward,
                         damage,
-                        currentAttack == PrototypeAttack.StepTeep);
+                        currentAttack == PrototypeAttack.StepTeep || matchWon);
+                }
+                if (matchWon)
+                {
+                    if (matchFlow == null)
+                    {
+                        matchFlow = FindObjectOfType<PrototypeRingOutReset>();
+                    }
+                    if (matchFlow != null)
+                    {
+                        string winner = controlProfile == PrototypeControlProfile.PlayerTwo
+                            ? "PLAYER 2"
+                            : "PLAYER 1";
+                        matchFlow.DeclareWinner(winner);
+                    }
                 }
                 if (hitboxMaterial != null)
                 {
@@ -1062,6 +1165,11 @@ namespace FightingGame.Prototype
 
         private void OnGUI()
         {
+            if (!playerControlled || !showControlHelp)
+            {
+                return;
+            }
+
             const int width = 430;
             Rect panel = new Rect(18f, 18f, width, 198f);
             GUI.Box(panel, GUIContent.none);

@@ -1,9 +1,10 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FightingGame.Prototype
 {
     /// <summary>
-    /// Lightweight visual reaction for the capsule opponent. This is intentionally
+    /// Lightweight visual reaction for the passive opponent. This is intentionally
     /// presentation-only until real hitstun and fighter physics are implemented.
     /// </summary>
     [DisallowMultipleComponent]
@@ -24,9 +25,10 @@ namespace FightingGame.Prototype
         [SerializeField, Min(0f)] private float knockdownDrop = 0.35f;
         [SerializeField, Min(0f)] private float knockdownPushSpeed = 2.4f;
 
-        private Renderer dummyRenderer;
-        private Material runtimeMaterial;
-        private Color baseColor;
+        private Material[] runtimeMaterials;
+        private Color[] baseColors;
+        private JinPrototypeController fighterController;
+        private PrototypeRingOutReset matchFlow;
         private Vector3 baseScale;
         private Quaternion baseRotation;
         private Vector3 reactionDirection;
@@ -39,15 +41,26 @@ namespace FightingGame.Prototype
         private float knockdownStartHeight;
         private Vector3 knockdownAxis;
 
+        public bool IsReacting { get { return reactionTimer > 0f || knockdownActive; } }
+
         private void Awake()
         {
             baseScale = transform.localScale;
             baseRotation = transform.rotation;
-            dummyRenderer = GetComponentInChildren<Renderer>();
-            if (dummyRenderer != null)
+            fighterController = GetComponent<JinPrototypeController>();
+            matchFlow = FindObjectOfType<PrototypeRingOutReset>();
+            Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+            List<Material> materials = new List<Material>();
+            foreach (Renderer currentRenderer in renderers)
             {
-                runtimeMaterial = dummyRenderer.material;
-                baseColor = runtimeMaterial.color;
+                materials.AddRange(currentRenderer.materials);
+            }
+
+            runtimeMaterials = materials.ToArray();
+            baseColors = new Color[runtimeMaterials.Length];
+            for (int i = 0; i < runtimeMaterials.Length; i++)
+            {
+                baseColors[i] = runtimeMaterials[i].color;
             }
         }
 
@@ -60,6 +73,8 @@ namespace FightingGame.Prototype
 
             float strength = Mathf.Clamp01(damage / 18f);
             flashTimer = flashDuration;
+            baseRotation = transform.rotation;
+            LockControlsForReaction();
 
             if (knockdown)
             {
@@ -99,8 +114,9 @@ namespace FightingGame.Prototype
             knockdownActive = false;
             knockdownTimer = 0f;
             transform.localScale = baseScale;
-            transform.rotation = baseRotation;
+            baseRotation = transform.rotation;
             RestoreColor();
+            RestorePlayerControls();
         }
 
         private void Update()
@@ -116,7 +132,6 @@ namespace FightingGame.Prototype
             if (reactionTimer <= 0f)
             {
                 transform.localScale = Vector3.Lerp(transform.localScale, baseScale, 16f * Time.deltaTime);
-                transform.rotation = Quaternion.Slerp(transform.rotation, baseRotation, 16f * Time.deltaTime);
                 return;
             }
 
@@ -143,6 +158,7 @@ namespace FightingGame.Prototype
             {
                 transform.localScale = baseScale;
                 transform.rotation = baseRotation;
+                RestorePlayerControls();
             }
         }
 
@@ -185,6 +201,7 @@ namespace FightingGame.Prototype
                 Vector3 recoveredPosition = transform.position;
                 recoveredPosition.y = knockdownStartHeight;
                 transform.position = recoveredPosition;
+                RestorePlayerControls();
                 return;
             }
 
@@ -195,9 +212,37 @@ namespace FightingGame.Prototype
             transform.position = position;
         }
 
+        private void LockControlsForReaction()
+        {
+            if (fighterController == null)
+            {
+                return;
+            }
+
+            fighterController.ResetRuntimeState();
+            fighterController.SetControlsEnabled(false);
+        }
+
+        private void RestorePlayerControls()
+        {
+            if (matchFlow == null)
+            {
+                matchFlow = FindObjectOfType<PrototypeRingOutReset>();
+            }
+            if (matchFlow != null && matchFlow.ControlsLockedForResult)
+            {
+                return;
+            }
+
+            if (fighterController != null)
+            {
+                fighterController.SetControlsEnabled(fighterController.PlayerControlled);
+            }
+        }
+
         private void UpdateFlash()
         {
-            if (runtimeMaterial == null)
+            if (runtimeMaterials == null)
             {
                 return;
             }
@@ -206,9 +251,12 @@ namespace FightingGame.Prototype
             {
                 flashTimer = Mathf.Max(0f, flashTimer - Time.deltaTime);
                 float flashAmount = flashDuration > 0f ? flashTimer / flashDuration : 0f;
-                runtimeMaterial.color = Color.Lerp(baseColor, Color.white, flashAmount);
+                for (int i = 0; i < runtimeMaterials.Length; i++)
+                {
+                    runtimeMaterials[i].color = Color.Lerp(baseColors[i], Color.white, flashAmount);
+                }
             }
-            else if (runtimeMaterial.color != baseColor)
+            else
             {
                 RestoreColor();
             }
@@ -216,17 +264,30 @@ namespace FightingGame.Prototype
 
         private void RestoreColor()
         {
-            if (runtimeMaterial != null)
+            if (runtimeMaterials == null)
             {
-                runtimeMaterial.color = baseColor;
+                return;
+            }
+
+            for (int i = 0; i < runtimeMaterials.Length; i++)
+            {
+                runtimeMaterials[i].color = baseColors[i];
             }
         }
 
         private void OnDestroy()
         {
-            if (runtimeMaterial != null)
+            if (runtimeMaterials == null)
             {
-                Destroy(runtimeMaterial);
+                return;
+            }
+
+            foreach (Material material in runtimeMaterials)
+            {
+                if (material != null)
+                {
+                    Destroy(material);
+                }
             }
         }
     }
