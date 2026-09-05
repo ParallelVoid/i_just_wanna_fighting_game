@@ -13,6 +13,8 @@ namespace FightingGame.Prototype
         [SerializeField, Min(1f)] private float dangerThreshold = 100f;
         [SerializeField, Min(0f)] private float accumulatedDamage;
         [SerializeField, Range(0f, 2f)] private float damageGrowthAtDanger = 0.75f;
+        [SerializeField, Min(0f)] private float recoveryDelay = 3f;
+        [SerializeField, Min(0f)] private float recoveryPerSecond = 1.5f;
 
         [Header("Condition monitor")]
         [SerializeField, Min(0.1f)] private float calmPulseSpeed = 1.15f;
@@ -24,6 +26,9 @@ namespace FightingGame.Prototype
         private Texture2D pixel;
         private GUIStyle titleStyle;
         private GUIStyle valueStyle;
+        private float lastDamageTime = -100f;
+        private float wavePhase;
+        private float currentPulseSpeed;
 
         public float AccumulatedDamage { get { return accumulatedDamage; } }
         public float DamageRatio { get { return dangerThreshold > 0f ? accumulatedDamage / dangerThreshold : 0f; } }
@@ -41,6 +46,7 @@ namespace FightingGame.Prototype
             float multiplier = 1f + vulnerability * damageGrowthAtDanger;
             LastDamageApplied = Mathf.Max(0f, baseAmount) * multiplier;
             accumulatedDamage = Mathf.Max(0f, accumulatedDamage + LastDamageApplied);
+            lastDamageTime = Time.time;
             return strongAttack && accumulatedDamage >= dangerThreshold;
         }
 
@@ -48,6 +54,35 @@ namespace FightingGame.Prototype
         {
             accumulatedDamage = 0f;
             LastDamageApplied = 0f;
+            lastDamageTime = -100f;
+        }
+
+        private void Update()
+        {
+            float danger = Mathf.Clamp01(DamageRatio);
+            float targetPulseSpeed = Mathf.Lerp(
+                calmPulseSpeed,
+                dangerPulseSpeed,
+                Mathf.SmoothStep(0f, 1f, danger));
+            if (currentPulseSpeed <= 0f)
+            {
+                currentPulseSpeed = targetPulseSpeed;
+            }
+            float speedBlend = 1f - Mathf.Exp(-6f * Time.deltaTime);
+            currentPulseSpeed = Mathf.Lerp(currentPulseSpeed, targetPulseSpeed, speedBlend);
+            wavePhase = Mathf.Repeat(
+                wavePhase + currentPulseSpeed * Mathf.PI * 2f * Time.deltaTime,
+                Mathf.PI * 2f);
+
+            if (accumulatedDamage <= 0f || Time.time - lastDamageTime < recoveryDelay)
+            {
+                return;
+            }
+
+            accumulatedDamage = Mathf.MoveTowards(
+                accumulatedDamage,
+                0f,
+                recoveryPerSecond * Time.deltaTime);
         }
 
         private void OnGUI()
@@ -89,10 +124,6 @@ namespace FightingGame.Prototype
                 return;
             }
 
-            float danger = Mathf.Clamp01(DamageRatio);
-            float dangerBlend = Mathf.SmoothStep(0f, 1f, danger);
-            float pulseSpeed = Mathf.Lerp(calmPulseSpeed, dangerPulseSpeed, dangerBlend);
-            float phase = Time.time * pulseSpeed * Mathf.PI * 2f;
             const float sampleSpacing = 3f;
             const float cycles = 3.25f;
             Vector2 previous = Vector2.zero;
@@ -100,7 +131,7 @@ namespace FightingGame.Prototype
             for (float x = 0f; x <= rect.width; x += sampleSpacing)
             {
                 float normalizedX = x / rect.width;
-                float signal = Mathf.Sin(normalizedX * cycles * Mathf.PI * 2f - phase);
+                float signal = Mathf.Sin(normalizedX * cycles * Mathf.PI * 2f - wavePhase);
                 Vector2 point = new Vector2(rect.x + x, rect.center.y - signal * waveAmplitude);
                 if (x > 0f)
                 {

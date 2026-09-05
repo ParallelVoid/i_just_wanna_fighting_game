@@ -206,6 +206,8 @@ The top-right monitor presents the condition as a continuously moving sinusoidal
 
 Actual damage rises with the defender's existing accumulated percentage. The multiplier scales linearly from `1.0x` at 0% to `1.75x` at 100% and remains capped at `1.75x` beyond that point. This makes later clean hits increase the percentage faster than early hits.
 
+Accumulated damage begins recovering after 2.5 seconds without taking another hit. It then falls toward 0% at 3 percentage points per second. Any new hit immediately pauses recovery and restarts the delay, rewarding sustained pressure while still allowing a defender to recover during a long disengagement.
+
 The high kick and stepping teep are strong finishers. Weak attacks may build the opponent to or beyond 100%, but only a confirmed strong finisher that brings the defender to 100% or more wins the match. The loser is knocked down, both controls freeze, a winner message is shown for 2.25 seconds, and then positions, damage, reactions, and the timer reset for another round.
 
 For immediate prototype feedback, the passive second Jin flashes white, leans away from the strike, compresses slightly, and slides backward on confirmed contact. Stronger attacks produce a larger reaction. The stepping teep causes a dedicated knockdown: the dummy is pushed back, falls onto its side, remains grounded briefly, and then recovers. This is a presentation reaction rather than a final hitstun or physics system. Ring-out resets also clear any reaction in progress.

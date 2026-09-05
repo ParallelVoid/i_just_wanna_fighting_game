@@ -187,11 +187,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   moveSpeed: 2.25
   acceleration: 14
-  facingSpeed: 14
   opponentTarget: {fileID: 0}
   playerControlled: 1
   controlProfile: 0
   showControlHelp: 1
+  pushboxRadius: 0.42
   doubleTapWindow: 0.24
   runSpeedMultiplier: 1.65
   backdashSpeed: 5.4
