@@ -1,0 +1,105 @@
+using UnityEngine;
+
+namespace FightingGame.Prototype
+{
+    public enum PrototypeControlProfile
+    {
+        PlayerOne,
+        PlayerTwo
+    }
+
+    public struct PrototypeInputFrame
+    {
+        public bool ForwardHeld;
+        public bool BackwardHeld;
+        public bool ForwardPressed;
+        public bool BackwardPressed;
+        public float Side;
+        public Vector2 AttackDirection;
+    }
+
+    /// <summary>
+    /// Samples one fighter's controls. It intentionally contains no movement or
+    /// combat rules, so keyboard/gamepad bindings can be replaced independently.
+    /// </summary>
+    [DisallowMultipleComponent]
+    public sealed class PrototypeFighterInput : MonoBehaviour
+    {
+        [SerializeField] private PrototypeControlProfile controlProfile = PrototypeControlProfile.PlayerOne;
+
+        public PrototypeControlProfile ControlProfile { get { return controlProfile; } }
+
+        public void SetControlProfile(PrototypeControlProfile profile)
+        {
+            controlProfile = profile;
+        }
+
+        public PrototypeInputFrame Sample()
+        {
+            bool playerOne = controlProfile == PrototypeControlProfile.PlayerOne;
+            KeyCode forwardKey = playerOne ? KeyCode.D : KeyCode.L;
+            KeyCode backwardKey = playerOne ? KeyCode.A : KeyCode.J;
+
+            PrototypeInputFrame frame = new PrototypeInputFrame
+            {
+                ForwardHeld = Input.GetKey(forwardKey) || (playerOne && Input.GetKey(KeyCode.JoystickButton5)),
+                BackwardHeld = Input.GetKey(backwardKey) || (playerOne && Input.GetKey(KeyCode.JoystickButton4)),
+                ForwardPressed = Input.GetKeyDown(forwardKey) || (playerOne && Input.GetKeyDown(KeyCode.JoystickButton5)),
+                BackwardPressed = Input.GetKeyDown(backwardKey) || (playerOne && Input.GetKeyDown(KeyCode.JoystickButton4)),
+                Side = ReadSideInput(playerOne),
+                AttackDirection = ReadAttackDirection(playerOne)
+            };
+            return frame;
+        }
+
+        private static float ReadSideInput(bool playerOne)
+        {
+            float side = 0f;
+            KeyCode positiveKey = playerOne ? KeyCode.W : KeyCode.I;
+            KeyCode negativeKey = playerOne ? KeyCode.S : KeyCode.K;
+            if (Input.GetKey(positiveKey)) side += 1f;
+            if (Input.GetKey(negativeKey)) side -= 1f;
+            return side;
+        }
+
+        private Vector2 ReadAttackDirection(bool playerOne)
+        {
+            Vector2 direction = Vector2.zero;
+            if (playerOne)
+            {
+                if (Input.GetKey(KeyCode.RightArrow)) direction.x += 1f;
+                if (Input.GetKey(KeyCode.LeftArrow)) direction.x -= 1f;
+                if (Input.GetKey(KeyCode.UpArrow)) direction.y += 1f;
+                if (Input.GetKey(KeyCode.DownArrow)) direction.y -= 1f;
+            }
+            else
+            {
+                if (Input.GetKey(KeyCode.H)) direction.x += 1f;
+                if (Input.GetKey(KeyCode.F)) direction.x -= 1f;
+                if (Input.GetKey(KeyCode.T)) direction.y += 1f;
+                if (Input.GetKey(KeyCode.G)) direction.y -= 1f;
+            }
+
+            if (direction.sqrMagnitude > 0f)
+            {
+                return Vector2.ClampMagnitude(direction, 1f);
+            }
+
+            if (!playerOne)
+            {
+                return Vector2.zero;
+            }
+
+            // The legacy Horizontal/Vertical axes also include WASD. Suppress that
+            // contribution while movement keys are held so only a gamepad stick attacks.
+            if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.A) ||
+                Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.D))
+            {
+                return Vector2.zero;
+            }
+
+            return Vector2.ClampMagnitude(
+                new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical")), 1f);
+        }
+    }
+}

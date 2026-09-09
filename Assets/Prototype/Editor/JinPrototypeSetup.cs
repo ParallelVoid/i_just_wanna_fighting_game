@@ -1,4 +1,5 @@
 using FightingGame.Prototype;
+using Combat;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -22,7 +23,16 @@ namespace FightingGame.EditorTools
         private const string TwoPlayerScenePath = "Assets/Scenes/TwoPlayerSampleScene.unity";
         private const string PrefabPath = "Assets/Prototype/Prefabs/JinPrototype.prefab";
         private const string OctagonMeshPath = "Assets/Prototype/Materials/Prototype_Octagon.asset";
-        private const string AutoSetupSessionKey = "FightingGame.JinPrototypeSetup.v17";
+        private const string MovesFolder = "Assets/Prototype/Moves";
+        private const string AutoSetupSessionKey = "FightingGame.JinPrototypeSetup.v19";
+
+        private sealed class PrototypeMoveSet
+        {
+            public MoveDefinition Punch;
+            public MoveDefinition HighKick;
+            public MoveDefinition LowKick;
+            public MoveDefinition Teep;
+        }
 
         static JinPrototypeSetup()
         {
@@ -69,6 +79,7 @@ namespace FightingGame.EditorTools
             Material faceMaterial = CreateOrUpdateMaterial("Assets/Prototype/Materials/Jin_Face.mat", faceTexture, 0.2f);
             Material mouthMaterial = CreateOrUpdateMaterial("Assets/Prototype/Materials/Jin_Mouth.mat", mouthTexture, 0.05f);
             Material groundMaterial = CreateOrUpdateGroundMaterial();
+            PrototypeMoveSet moves = CreateOrUpdatePrototypeMoves();
 
             Scene scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
             RemoveExisting("Jin Prototype");
@@ -88,6 +99,7 @@ namespace FightingGame.EditorTools
             {
                 jin.AddComponent<JinPrototypeController>();
             }
+            ConfigureMoves(jin, moves);
 
             GameObject opponent = (GameObject)PrefabUtility.InstantiatePrefab(modelAsset, scene);
             opponent.name = "Prototype Opponent";
@@ -98,6 +110,7 @@ namespace FightingGame.EditorTools
             NormalizeCharacterSizeAndGround(opponent, 1.82f);
 
             JinPrototypeController opponentController = opponent.AddComponent<JinPrototypeController>();
+            ConfigureMoves(opponent, moves);
             opponentController.SetPlayerControlled(false);
             opponentController.SetOpponent(jin.transform);
             AddPrototypeHurtbox(opponent);
@@ -279,6 +292,96 @@ namespace FightingGame.EditorTools
             mesh.RecalculateBounds();
             EditorUtility.SetDirty(mesh);
             return mesh;
+        }
+
+        private static PrototypeMoveSet CreateOrUpdatePrototypeMoves()
+        {
+            if (!AssetDatabase.IsValidFolder(MovesFolder))
+            {
+                AssetDatabase.CreateFolder("Assets/Prototype", "Moves");
+            }
+
+            PrototypeMoveSet set = new PrototypeMoveSet();
+            set.Punch = CreateOrUpdateMove(
+                "Prototype_StraightPunch", "straight_punch", "Straight Punch", "AttackRight",
+                5, 8, 12, 8, HitLevel.High, KnockdownType.None,
+                new Vector3(0f, 1.25f, 0.72f), new Vector3(0.25f, 0.16f, 0.28f));
+            set.HighKick = CreateOrUpdateMove(
+                "Prototype_HighKick", "high_kick", "High Kick", "AttackUp",
+                10, 12, 15, 16, HitLevel.High, KnockdownType.None,
+                new Vector3(0f, 1.38f, 0.76f), new Vector3(0.275f, 0.23f, 0.31f));
+            set.LowKick = CreateOrUpdateMove(
+                "Prototype_LowKick", "low_kick", "Low Kick", "AttackDown",
+                7, 10, 13, 11, HitLevel.Low, KnockdownType.None,
+                new Vector3(0f, 0.46f, 0.68f), new Vector3(0.29f, 0.15f, 0.32f));
+            set.Teep = CreateOrUpdateMove(
+                "Prototype_StepTeep", "step_teep", "Stepping Teep", "ForwardHeld+Back,Neutral,Forward",
+                14, 14, 15, 18, HitLevel.Mid, KnockdownType.HardKnockdown,
+                new Vector3(0f, 0.94f, 0.88f), new Vector3(0.29f, 0.21f, 0.34f));
+            return set;
+        }
+
+        private static MoveDefinition CreateOrUpdateMove(
+            string assetName,
+            string moveId,
+            string displayName,
+            string inputCommand,
+            int startupFrames,
+            int activeFrames,
+            int recoveryFrames,
+            int damage,
+            HitLevel hitLevel,
+            KnockdownType knockdown,
+            Vector3 localPosition,
+            Vector3 halfExtents)
+        {
+            string path = MovesFolder + "/" + assetName + ".asset";
+            MoveDefinition move = AssetDatabase.LoadAssetAtPath<MoveDefinition>(path);
+            if (move == null)
+            {
+                move = ScriptableObject.CreateInstance<MoveDefinition>();
+                AssetDatabase.CreateAsset(move, path);
+            }
+
+            move.moveId = moveId;
+            move.displayName = displayName;
+            move.inputCommand = inputCommand;
+            move.requiredFighterStates = new[]
+            {
+                FighterState.Idle,
+                FighterState.Walk,
+                FighterState.Sidestep,
+                FighterState.Run
+            };
+            move.startupFrames = startupFrames;
+            move.activeFrames = activeFrames;
+            move.recoveryFrames = recoveryFrames;
+            move.damage = damage;
+            move.chipDamage = 0;
+            move.defaultHitLevel = hitLevel;
+            move.knockdownType = knockdown;
+            move.animationStateName = displayName.Replace(" ", string.Empty);
+            if (move.hitboxes == null) move.hitboxes = new System.Collections.Generic.List<HitboxDefinition>();
+            move.hitboxes.Clear();
+            move.hitboxes.Add(new HitboxDefinition
+            {
+                label = moveId,
+                shape = HitVolumeShape.Box,
+                size = halfExtents,
+                localPosition = localPosition,
+                startFrame = startupFrames,
+                endFrame = startupFrames + activeFrames - 1,
+                hitLevel = hitLevel
+            });
+            EditorUtility.SetDirty(move);
+            return move;
+        }
+
+        private static void ConfigureMoves(GameObject fighter, PrototypeMoveSet moves)
+        {
+            PrototypeFighterCombat combat = fighter.GetComponent<PrototypeFighterCombat>();
+            if (combat == null) combat = fighter.AddComponent<PrototypeFighterCombat>();
+            combat.ConfigureMoves(moves.Punch, moves.HighKick, moves.LowKick, moves.Teep);
         }
 
         private static Material CreateOrUpdateMaterial(string path, Texture2D texture, float smoothness)

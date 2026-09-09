@@ -170,26 +170,26 @@ Both Jins can attack, accumulate damage, recoil, suffer the teep knockdown, and 
 
 ### Current attack behavior
 
-The four attacks are visual animation prototypes only:
+The four attacks now execute `MoveDefinition` assets at 60 simulation frames per second:
 
-| Direction | Attack | Temporary duration | Intended role |
-|---|---|---:|---|
-| Right | Straight punch | 0.42 s | Fast mid-range check |
-| Up | High kick | 0.62 s | Slower, stronger high attack |
-| Down | Low kick | 0.50 s | Low defensive check |
-| Hold forward movement + Back → Neutral → Forward | Stepping teep | 0.72 s | Advancing mid push kick and range-control tool |
+| Direction | Attack | Startup | Active | Recovery | Intended role |
+|---|---|---:|---:|---:|---|
+| Right | Straight punch | 5f | 8f | 12f | Fast high check |
+| Up | High kick | 10f | 12f | 15f | Slower, stronger high attack |
+| Down | Low kick | 7f | 10f | 13f | Low defensive check |
+| Hold forward movement + Back → Neutral → Forward | Stepping teep | 14f | 14f | 15f | Advancing mid push kick and range-control tool |
 
 The teep command must be completed within 0.42 seconds. It demonstrates how movement-button state and an attack-stick sequence can combine into a more advanced Buriki-style technique. It steps the fighter forward during the kick and takes priority over the ordinary forward-direction punch when the sequence is recognized.
 
 ### Prototype hitboxes
 
-Every prototype attack now has an opponent-relative box hit volume with a short active window matched to the procedural pose. Jin's `Show Hitboxes` Inspector checkbox controls the runtime visualization:
+Every prototype attack now reads its collision volumes from the move asset's `HitboxDefinition` timeline. Box, sphere, and capsule volumes are supported in fighter-root or named-bone space. The `PrototypeFighterCombat` component's `Show Hitboxes` checkbox controls runtime visualization:
 
 - Red translucent box: the attack is currently active and has not connected.
 - Green translucent box: the active attack connected with the prototype opponent's capsule-shaped hurt volume.
 - Hidden: startup, recovery, idle, or `Show Hitboxes` is disabled.
 
-Contact is latched once per attack. This is deliberately still a diagnostic layer: hit reactions, block reactions, knockback, hit stop, and frame-data assets remain future work.
+Contact is latched once per attack. Damage, hit level, knockdown type, and optional per-hitbox damage overrides come from move data. The current single guard blocks high, mid, and low attacks; throws and unblockables bypass it. Dedicated hitstun, blockstun, pushback, hit stop, priority clashes, and multi-hit rules remain future work.
 
 ### Accumulated-damage condition monitor
 
@@ -225,12 +225,12 @@ The `Main Camera` object's `TekkenPrototypeCamera` component has a `Countdown` c
 Current attacks:
 
 - Temporarily lock movement.
-- Use a startup/extension/recovery envelope.
+- Use frame-authored startup, active, and recovery timing.
 - Pose limbs procedurally.
 - Create timed, opponent-relative prototype hitboxes.
 - Add move-specific accumulated damage when a hitbox contacts the opponent.
-- Do not cause hitstun, blockstun, pushback, or knockdown.
-- Are not yet authored in simulation frames.
+- Use data-authored hit levels, damage, and knockdown type.
+- Do not yet apply authored hitstun, blockstun, pushback, tracking, cancels, or meter properties.
 
 ### Ring-out behavior
 
@@ -278,13 +278,13 @@ Recommended fix:
 4. Test an idle, walk, punch, and kick clip.
 5. Replace the temporary procedural attacks with authored clips while keeping simulation-driven timing.
 
-### The controller is currently monolithic
+### The controller split has started
 
-`JinPrototypeController` presently owns input, movement, state, procedural animation, attacks, and debug UI. This is acceptable for rapid experimentation but should not become the production architecture.
+Input sampling, locomotion, and combat resolution are now separate components. `JinPrototypeController` remains the compatibility-facing coordinator and temporary procedural presentation used by the prototype scenes. Its next extraction should move the procedural rig code into a replaceable presentation component.
 
-### Combat is time-based rather than frame-authored
+### The combat simulation is currently hybrid
 
-Movement and attacks currently use seconds and `Update()`. A competitive fighting game should move combat decisions into a fixed 60 Hz simulation and express startup, active, and recovery in frames.
+Attacks now advance through startup, active, and recovery frames using a 60 Hz accumulator, but movement and command sampling still run from `Update()`. The next determinism step is one shared fixed combat clock that records input and advances every fighter exactly once per tick.
 
 ### The two-player scene is keyboard-only
 
@@ -306,6 +306,14 @@ Assets/
 │   │   └── JinPrototype.prefab
 │   └── Scripts/
 │       ├── JinPrototypeController.cs
+│       ├── PrototypeFighterInput.cs
+│       ├── PrototypeFighterCombat.cs
+│       ├── PrototypeFighterMotor.cs
+│       ├── CombatEnums.cs
+│       ├── HitboxDefinition.cs
+│       ├── MoveDefinition.cs
+│       ├── PrototypeDamageHealth.cs
+│       ├── PrototypeDummyOpponent.cs
 │       ├── PrototypeRingOutReset.cs
 │       └── TekkenPrototypeCamera.cs
 ├── Scenes/
@@ -320,19 +328,25 @@ Assets/
 
 #### `JinPrototypeController`
 
-Currently handles:
+Currently coordinates the extracted modules and handles:
 
-- Keyboard and gamepad prototype input
-- Button-based forward/back movement
-- Double-tap recognition
-- Run and backdash
-- Opponent-relative sidestep
-- Facing correction
-- Blocking
-- Directional attack selection
 - Procedural idle, movement, block, punch, and kick posing
 - Runtime state reset
 - On-screen controls and state display
+
+#### `PrototypeFighterInput`
+
+Handles raw Player 1 / Player 2 keyboard bindings and Player 1 gamepad sampling. It returns a control snapshot and contains no movement or combat decisions.
+
+#### `PrototypeFighterCombat`
+
+Handles directional attack recognition, teep command timing, attack state, active hitboxes, damage delivery, dummy reactions, and match-win notification. Its public attack state drives the temporary procedural presentation.
+
+Its four serialized move references point to generated assets under `Assets/Prototype/Moves`. Missing references receive non-persistent runtime fallback definitions so older scenes remain playable.
+
+#### `PrototypeFighterMotor`
+
+Handles button-based forward/back movement, double-tap run and backdash gestures, blocking, opponent-relative sidesteps, facing correction, teep translation, and fighter pushbox separation.
 
 #### `TekkenPrototypeCamera`
 
@@ -598,10 +612,10 @@ Acceptance criteria:
 
 #### 3. Create data-driven moves
 
-- Implement `MoveDefinition` assets.
-- Recreate the straight punch, high kick, and low kick as data.
-- Add editor validation for missing or invalid frame ranges.
-- Keep procedural posing temporarily, but trigger it from move state.
+- [x] Implement `MoveDefinition` assets.
+- [x] Recreate the straight punch, high kick, low kick, and stepping teep as data.
+- [x] Add editor validation for missing or invalid frame ranges.
+- [x] Keep procedural posing temporarily, but trigger it from move state.
 
 Acceptance criteria:
 
@@ -611,7 +625,7 @@ Acceptance criteria:
 #### 4. Implement hurtboxes, hitboxes, and pushboxes
 
 - Add persistent hurtboxes to head, torso, arms, and legs.
-- Add frame-driven hitboxes to each attack.
+- [x] Add frame-driven hitboxes to each attack.
 - [x] Add a prototype ground pushbox so fighters cannot overlap.
 - Visualize all collision shapes in training mode.
 - Resolve one hit per attack unless the move explicitly supports multiple hits.
@@ -678,19 +692,22 @@ Only after the shared combat system works:
 
 ### Sprint A: combat foundation
 
-- [ ] Extract input sampling from `JinPrototypeController`
+- [x] Extract input sampling from `JinPrototypeController`
+- [x] Extract attack, hitbox, damage, and win resolution from `JinPrototypeController`
+- [x] Extract locomotion and movement gestures into a fighter motor
+- [ ] Extract procedural rig posing into a fighter presentation component
 - [ ] Add 60 Hz combat clock
 - [ ] Add frame-by-frame input history
 - [ ] Add explicit fighter states
-- [ ] Convert four attacks to frame-based move data
+- [x] Convert four attacks to frame-based move data
 - [ ] Add frame-step debugging
 
 ### Sprint B: first contact
 
 - [ ] Add hurtboxes
-- [ ] Add attack hitboxes
+- [x] Add attack hitboxes
 - [x] Add prototype circular pushboxes
-- [ ] Add hit detection
+- [x] Add hit detection
 - [ ] Add health and damage
 - [ ] Add hitstop
 - [ ] Add hitstun and pushback
