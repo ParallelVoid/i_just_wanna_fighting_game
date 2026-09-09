@@ -1,0 +1,56 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c95f8756e37e44589bed4878e586f311, type: 3}
+  m_Name: Prototype_LowKick
+  m_EditorClassIdentifier: 
+  moveId: low_kick
+  displayName: Low Kick
+  inputCommand: AttackDown
+  requiredFighterStates: 00000000010000000200000003000000
+  startupFrames: 7
+  activeFrames: 10
+  recoveryFrames: 13
+  damage: 11
+  chipDamage: 0
+  hitstunFrames: 14
+  blockstunFrames: 10
+  defaultHitLevel: 2
+  counterHitBonusStunFrames: 6
+  counterHitKnockdown: 0
+  pushbackOnHit: 0.25
+  pushbackOnBlock: 0.15
+  knockdownType: 0
+  trackingStrength: 0
+  cancelCategories: 0
+  cancelWindowStartFrame: 0
+  cancelWindowEndFrame: 0
+  meterCost: 0
+  meterGainOnWhiff: 2
+  meterGainOnHit: 6
+  meterGainOnBlock: 3
+  hitboxes:
+  - label: low_kick
+    shape: 2
+    size: {x: 0.29, y: 0.15, z: 0.32}
+    attachedBoneName: 
+    localPosition: {x: 0, y: 0.46, z: 0.68}
+    localEulerRotation: {x: 0, y: 0, z: 0}
+    startFrame: 7
+    endFrame: 16
+    hitLevel: 2
+    hitPriority: 0
+    damageOverride: -1
+    hitstunOverride: -1
+  animationStateName: LowKick
+  soundEvents: []
+  effectEvents: []
+  requiredVariationId: 

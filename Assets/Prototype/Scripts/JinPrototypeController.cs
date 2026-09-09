@@ -1,66 +1,29 @@
 using System;
 using System.Collections.Generic;
+using Combat;
 using UnityEngine;
 
 namespace FightingGame.Prototype
 {
-    public enum PrototypeControlProfile
-    {
-        PlayerOne,
-        PlayerTwo
-    }
-
     /// <summary>
-    /// Small, dependency-free controller used to evaluate the imported Jin model.
-    /// It provides opponent-relative movement, procedural posing, and directional attacks.
-    /// Replace this with authored clips once the combat controller is ready.
+    /// Compatibility-facing coordinator and temporary procedural presentation for Jin.
+    /// Input, locomotion, and combat rules live in dedicated fighter components.
     /// </summary>
     [DisallowMultipleComponent]
+    [RequireComponent(typeof(PrototypeFighterInput), typeof(PrototypeFighterCombat), typeof(PrototypeFighterMotor))]
     public sealed class JinPrototypeController : MonoBehaviour
     {
-        private enum PrototypeAttack
-        {
-            None,
-            StraightPunch,
-            HighKick,
-            LowKick,
-            StepTeep
-        }
-
-        [Header("Movement")]
-        [SerializeField, Min(0.1f)] private float moveSpeed = 2.25f;
-        [SerializeField, Min(0f)] private float acceleration = 14f;
+        [Header("Fighter")]
         [SerializeField] private Transform opponentTarget;
         [SerializeField] private bool playerControlled = true;
         [SerializeField] private PrototypeControlProfile controlProfile = PrototypeControlProfile.PlayerOne;
         [SerializeField] private bool showControlHelp = true;
-        [SerializeField, Min(0.1f)] private float pushboxRadius = 0.42f;
-
-        [Header("Movement techniques")]
-        [SerializeField, Range(0.1f, 0.5f)] private float doubleTapWindow = 0.24f;
-        [SerializeField, Min(1f)] private float runSpeedMultiplier = 1.65f;
-        [SerializeField, Min(0.1f)] private float backdashSpeed = 5.4f;
-        [SerializeField, Range(0.1f, 0.8f)] private float backdashDuration = 0.32f;
 
         [Header("Procedural pose")]
         [SerializeField, Min(0f)] private float idleBreathSpeed = 1.7f;
         [SerializeField, Range(0f, 0.04f)] private float idleBobAmount = 0.008f;
         [SerializeField, Range(0f, 1f)] private float idleMotionScale = 0.18f;
-        [SerializeField, Min(0.1f)] private float stepFrequency = 2.3f;
         [SerializeField, Range(0f, 1f)] private float stepAmount = 0.28f;
-
-        [Header("Attack prototype")]
-        [SerializeField, Min(0.1f)] private float punchDuration = 0.42f;
-        [SerializeField, Min(0.1f)] private float highKickDuration = 0.62f;
-        [SerializeField, Min(0.1f)] private float lowKickDuration = 0.5f;
-        [SerializeField, Min(0.1f)] private float teepDuration = 0.72f;
-        [SerializeField, Range(0.15f, 0.8f)] private float teepSequenceWindow = 0.42f;
-        [SerializeField, Min(0f)] private float teepStepSpeed = 2.4f;
-
-        [Header("Hitbox prototype")]
-        [SerializeField] private bool showHitboxes = true;
-        [SerializeField] private Color activeHitboxColor = new Color(1f, 0.12f, 0.08f, 0.3f);
-        [SerializeField] private Color connectedHitboxColor = new Color(0.15f, 1f, 0.25f, 0.38f);
 
         private Animator animator;
         private HumanPoseHandler poseHandler;
@@ -73,46 +36,28 @@ namespace FightingGame.Prototype
         private readonly Dictionary<string, Quaternion> fallbackRotations = new Dictionary<string, Quaternion>();
         private Transform fallbackHips;
         private Vector3 fallbackHipsPosition;
-        private float currentSpeed;
-        private float currentSideSpeed;
-        private float stepClock;
         private bool humanoidPoseAvailable;
-        private PrototypeAttack currentAttack;
-        private float attackTimer;
-        private float attackDuration;
-        private bool attackDirectionHeld;
+        private PrototypeFighterInput fighterInput;
+        private PrototypeFighterCombat fighterCombat;
+        private PrototypeFighterMotor fighterMotor;
         private bool controlsEnabled = true;
-        private float lastForwardTapTime = -10f;
-        private float lastBackwardTapTime = -10f;
-        private float backdashTimer;
-        private bool isRunning;
-        private bool isBlocking;
-        private float teepBackInputTime = -10f;
-        private bool attackConnected;
-        private GameObject hitboxVisual;
-        private Renderer hitboxRenderer;
-        private Material hitboxMaterial;
-        private readonly Collider[] hitboxResults = new Collider[16];
-        private PrototypeDamageHealth opponentHealth;
-        private PrototypeDummyOpponent opponentDummy;
         private PrototypeDummyOpponent selfReaction;
-        private PrototypeRingOutReset matchFlow;
 
-        public float MoveInput { get; private set; }
-        public float SideInput { get; private set; }
-        public bool IsMoving { get { return CurrentPlanarSpeed > 0.03f; } }
-        public bool IsRunning { get { return isRunning; } }
-        public bool IsBlocking { get { return isBlocking; } }
-        public bool IsBackdashing { get { return backdashTimer > 0f; } }
+        public float MoveInput { get { return fighterMotor != null ? fighterMotor.MoveInput : 0f; } }
+        public float SideInput { get { return fighterMotor != null ? fighterMotor.SideInput : 0f; } }
+        public bool IsMoving { get { return fighterMotor != null && fighterMotor.IsMoving; } }
+        public bool IsRunning { get { return fighterMotor != null && fighterMotor.IsRunning; } }
+        public bool IsBlocking { get { return fighterMotor != null && fighterMotor.IsBlocking; } }
+        public bool IsBackdashing { get { return fighterMotor != null && fighterMotor.IsBackdashing; } }
         public bool PlayerControlled { get { return playerControlled; } }
-        private float CurrentPlanarSpeed { get { return new Vector2(currentSpeed, currentSideSpeed).magnitude; } }
+        private float CurrentPlanarSpeed { get { return fighterMotor != null ? fighterMotor.CurrentPlanarSpeed : 0f; } }
 
         public void SetOpponent(Transform target)
         {
             opponentTarget = target;
-            opponentHealth = FindOpponentHealth(target);
-            opponentDummy = FindOpponentDummy(target);
-            SnapFacingToOpponent();
+            EnsureModules();
+            fighterCombat.SetOpponent(target);
+            fighterMotor.SetOpponent(target);
         }
 
         public void SetPlayerControlled(bool enabled)
@@ -124,6 +69,9 @@ namespace FightingGame.Prototype
         public void SetControlProfile(PrototypeControlProfile profile)
         {
             controlProfile = profile;
+            EnsureModules();
+            fighterInput.SetControlProfile(profile);
+            fighterCombat.SetControlProfile(profile);
         }
 
         public void SetShowControlHelp(bool visible)
@@ -136,59 +84,47 @@ namespace FightingGame.Prototype
             controlsEnabled = enabled;
             if (!enabled)
             {
-                MoveInput = 0f;
-                SideInput = 0f;
-                currentSpeed = 0f;
-                currentSideSpeed = 0f;
-                isRunning = false;
-                isBlocking = false;
-                backdashTimer = 0f;
+                EnsureModules();
+                fighterMotor.Stop();
             }
         }
 
         public void ResetRuntimeState()
         {
-            currentSpeed = 0f;
-            currentSideSpeed = 0f;
-            stepClock = 0f;
-            currentAttack = PrototypeAttack.None;
-            attackTimer = 0f;
-            attackDirectionHeld = false;
-            lastForwardTapTime = -10f;
-            lastBackwardTapTime = -10f;
-            teepBackInputTime = -10f;
-            backdashTimer = 0f;
-            isRunning = false;
-            isBlocking = false;
-            attackConnected = false;
-            MoveInput = 0f;
-            SideInput = 0f;
-            SetHitboxVisualActive(false);
+            EnsureModules();
+            fighterMotor.ResetRuntimeState();
+            fighterCombat.ResetRuntimeState();
         }
 
         private void Awake()
         {
+            EnsureModules();
+            fighterInput.SetControlProfile(controlProfile);
+            fighterCombat.Configure(opponentTarget, controlProfile);
+            fighterMotor.SetOpponent(opponentTarget);
             controlsEnabled = playerControlled;
-            SnapFacingToOpponent();
             animator = GetComponentInChildren<Animator>();
             selfReaction = GetComponent<PrototypeDummyOpponent>();
-            matchFlow = FindObjectOfType<PrototypeRingOutReset>();
             CacheFallbackRig();
             TryInitializeHumanoidPose();
         }
 
-        private void SnapFacingToOpponent()
+        private void EnsureModules()
         {
-            if (opponentTarget == null)
+            if (fighterInput == null)
             {
-                return;
+                fighterInput = GetComponent<PrototypeFighterInput>();
+                if (fighterInput == null) fighterInput = gameObject.AddComponent<PrototypeFighterInput>();
             }
-
-            Vector3 fightForward = opponentTarget.position - transform.position;
-            fightForward.y = 0f;
-            if (fightForward.sqrMagnitude > 0.0001f)
+            if (fighterCombat == null)
             {
-                transform.rotation = Quaternion.LookRotation(fightForward.normalized, Vector3.up);
+                fighterCombat = GetComponent<PrototypeFighterCombat>();
+                if (fighterCombat == null) fighterCombat = gameObject.AddComponent<PrototypeFighterCombat>();
+            }
+            if (fighterMotor == null)
+            {
+                fighterMotor = GetComponent<PrototypeFighterMotor>();
+                if (fighterMotor == null) fighterMotor = gameObject.AddComponent<PrototypeFighterMotor>();
             }
         }
 
@@ -206,547 +142,20 @@ namespace FightingGame.Prototype
             {
                 if (!playerControlled && (selfReaction == null || !selfReaction.IsReacting))
                 {
-                    SnapFacingToOpponent();
+                    fighterMotor.SnapFacingToOpponent();
                 }
                 return;
             }
 
-            KeyCode forwardKey = controlProfile == PrototypeControlProfile.PlayerOne ? KeyCode.D : KeyCode.L;
-            KeyCode backwardKey = controlProfile == PrototypeControlProfile.PlayerOne ? KeyCode.A : KeyCode.J;
-            bool useGamepad = controlProfile == PrototypeControlProfile.PlayerOne;
-            bool forwardHeld = Input.GetKey(forwardKey) || (useGamepad && Input.GetKey(KeyCode.JoystickButton5));
-            bool backwardHeld = Input.GetKey(backwardKey) || (useGamepad && Input.GetKey(KeyCode.JoystickButton4));
-            bool forwardPressed = Input.GetKeyDown(forwardKey) || (useGamepad && Input.GetKeyDown(KeyCode.JoystickButton5));
-            bool backwardPressed = Input.GetKeyDown(backwardKey) || (useGamepad && Input.GetKeyDown(KeyCode.JoystickButton4));
+            PrototypeInputFrame input = fighterInput.Sample();
+            fighterMotor.PrepareFrame(input, fighterCombat.IsAttacking);
+            fighterCombat.Tick(input.ForwardHeld, input.AttackDirection,
+                !fighterMotor.IsBlocking && !fighterMotor.IsBackdashing,
+                fighterMotor.GetCurrentFighterState(input));
+            fighterMotor.Simulate(input, fighterCombat.CurrentAttack,
+                fighterCombat.TeepStepEnvelope, fighterCombat.OccupiedThisFrame);
 
-            UpdateMovementGestures(forwardHeld, backwardHeld, forwardPressed, backwardPressed);
-            isBlocking = forwardHeld && backwardHeld && currentAttack == PrototypeAttack.None && !IsBackdashing;
-            if (isBlocking)
-            {
-                isRunning = false;
-            }
-
-            if (!isBlocking && !IsBackdashing)
-            {
-                UpdateAttackInput(forwardHeld);
-            }
-
-            // Buriki-style separation: buttons move, directions attack.
-            MoveInput = 0f;
-            if (!isBlocking && !IsBackdashing)
-            {
-                if (forwardHeld) MoveInput += 1f;
-                if (backwardHeld) MoveInput -= 1f;
-            }
-
-            SideInput = 0f;
-            if (!isBlocking && !IsBackdashing)
-            {
-                KeyCode sidePositiveKey = controlProfile == PrototypeControlProfile.PlayerOne ? KeyCode.W : KeyCode.I;
-                KeyCode sideNegativeKey = controlProfile == PrototypeControlProfile.PlayerOne ? KeyCode.S : KeyCode.K;
-                if (Input.GetKey(sidePositiveKey)) SideInput += 1f;
-                if (Input.GetKey(sideNegativeKey)) SideInput -= 1f;
-            }
-
-            if (currentAttack != PrototypeAttack.None)
-            {
-                MoveInput = 0f;
-                SideInput = 0f;
-                attackTimer += Time.deltaTime;
-                if (attackTimer >= attackDuration)
-                {
-                    currentAttack = PrototypeAttack.None;
-                    attackTimer = 0f;
-                }
-            }
-
-            Vector2 desiredMovement = Vector2.ClampMagnitude(new Vector2(MoveInput, SideInput), 1f);
-            float movementSpeed = isRunning && forwardHeld ? moveSpeed * runSpeedMultiplier : moveSpeed;
-            float targetSpeed = desiredMovement.x * movementSpeed;
-            float targetSideSpeed = desiredMovement.y * moveSpeed;
-
-            if (IsBackdashing)
-            {
-                backdashTimer = Mathf.Max(0f, backdashTimer - Time.deltaTime);
-                float normalizedBackdash = backdashDuration > 0f ? backdashTimer / backdashDuration : 0f;
-                currentSpeed = -backdashSpeed * Mathf.Sin(normalizedBackdash * Mathf.PI);
-                currentSideSpeed = Mathf.MoveTowards(currentSideSpeed, 0f, acceleration * Time.deltaTime);
-            }
-            else if (currentAttack == PrototypeAttack.StepTeep)
-            {
-                currentSpeed = teepStepSpeed * GetTeepStepEnvelope();
-                currentSideSpeed = 0f;
-            }
-            else
-            {
-                currentSpeed = Mathf.MoveTowards(currentSpeed, targetSpeed, acceleration * Time.deltaTime);
-                currentSideSpeed = Mathf.MoveTowards(currentSideSpeed, targetSideSpeed, acceleration * Time.deltaTime);
-            }
-
-            Vector3 position = transform.position;
-            Vector3 fightForward = Vector3.right;
-            if (opponentTarget != null)
-            {
-                fightForward = opponentTarget.position - position;
-                fightForward.y = 0f;
-                if (fightForward.sqrMagnitude > 0.0001f)
-                {
-                    fightForward.Normalize();
-                }
-                else
-                {
-                    fightForward = transform.forward;
-                }
-            }
-
-            // Forward/back follows the current fight line. Sidestep follows its tangent,
-            // producing an arc around the opponent instead of a flat world-Z slide.
-            Vector3 sidestepDirection = Vector3.Cross(fightForward, Vector3.up).normalized;
-            position += (fightForward * currentSpeed + sidestepDirection * currentSideSpeed) * Time.deltaTime;
-            position = ResolveFighterSeparation(position);
-            transform.position = position;
-
-            SnapFacingToOpponent();
-
-            if (CurrentPlanarSpeed > 0.03f)
-            {
-                stepClock += Time.deltaTime * stepFrequency * Mathf.Lerp(0.65f, 1f, CurrentPlanarSpeed / moveSpeed);
-            }
-
-            UpdateAttackHitbox();
-        }
-
-        private Vector3 ResolveFighterSeparation(Vector3 proposedPosition)
-        {
-            if (opponentTarget == null)
-            {
-                return proposedPosition;
-            }
-
-            Vector3 separation = proposedPosition - opponentTarget.position;
-            separation.y = 0f;
-            float minimumDistance = pushboxRadius * 2f;
-            if (separation.sqrMagnitude >= minimumDistance * minimumDistance)
-            {
-                return proposedPosition;
-            }
-
-            Vector3 separationDirection = separation.sqrMagnitude > 0.0001f
-                ? separation.normalized
-                : -transform.forward;
-            Vector3 correctedPosition = opponentTarget.position + separationDirection * minimumDistance;
-            correctedPosition.y = proposedPosition.y;
-            return correctedPosition;
-        }
-
-        private void UpdateMovementGestures(bool forwardHeld, bool backwardHeld, bool forwardPressed, bool backwardPressed)
-        {
-            if (forwardPressed && !backwardHeld)
-            {
-                if (Time.time - lastForwardTapTime <= doubleTapWindow)
-                {
-                    isRunning = true;
-                    lastForwardTapTime = -10f;
-                }
-                else
-                {
-                    lastForwardTapTime = Time.time;
-                }
-            }
-
-            if (!forwardHeld)
-            {
-                isRunning = false;
-            }
-
-            if (backwardPressed && !forwardHeld && currentAttack == PrototypeAttack.None)
-            {
-                if (Time.time - lastBackwardTapTime <= doubleTapWindow)
-                {
-                    backdashTimer = backdashDuration;
-                    lastBackwardTapTime = -10f;
-                    isRunning = false;
-                    currentSideSpeed = 0f;
-                }
-                else
-                {
-                    lastBackwardTapTime = Time.time;
-                }
-            }
-        }
-
-        private void UpdateAttackInput(bool forwardHeld)
-        {
-            Vector2 attackDirection = ReadAttackDirection();
-            bool directionActive = attackDirection.sqrMagnitude >= 0.36f;
-
-            if (Time.time - teepBackInputTime > teepSequenceWindow)
-            {
-                teepBackInputTime = -10f;
-            }
-
-            if (!directionActive)
-            {
-                attackDirectionHeld = false;
-                return;
-            }
-
-            if (attackDirectionHeld || currentAttack != PrototypeAttack.None)
-            {
-                return;
-            }
-
-            attackDirectionHeld = true;
-            if (forwardHeld && attackDirection.x < -0.45f)
-            {
-                teepBackInputTime = Time.time;
-                return;
-            }
-
-            if (forwardHeld && attackDirection.x > 0.45f &&
-                Time.time - teepBackInputTime <= teepSequenceWindow)
-            {
-                teepBackInputTime = -10f;
-                StartAttack(PrototypeAttack.StepTeep, teepDuration);
-                return;
-            }
-
-            if (attackDirection.y > 0.45f)
-            {
-                StartAttack(PrototypeAttack.HighKick, highKickDuration);
-            }
-            else if (attackDirection.y < -0.45f)
-            {
-                StartAttack(PrototypeAttack.LowKick, lowKickDuration);
-            }
-            else if (attackDirection.x > 0.35f)
-            {
-                StartAttack(PrototypeAttack.StraightPunch, punchDuration);
-            }
-        }
-
-        private Vector2 ReadAttackDirection()
-        {
-            Vector2 keyboardDirection = Vector2.zero;
-            if (controlProfile == PrototypeControlProfile.PlayerOne)
-            {
-                if (Input.GetKey(KeyCode.RightArrow)) keyboardDirection.x += 1f;
-                if (Input.GetKey(KeyCode.LeftArrow)) keyboardDirection.x -= 1f;
-                if (Input.GetKey(KeyCode.UpArrow)) keyboardDirection.y += 1f;
-                if (Input.GetKey(KeyCode.DownArrow)) keyboardDirection.y -= 1f;
-            }
-            else
-            {
-                if (Input.GetKey(KeyCode.H)) keyboardDirection.x += 1f;
-                if (Input.GetKey(KeyCode.F)) keyboardDirection.x -= 1f;
-                if (Input.GetKey(KeyCode.T)) keyboardDirection.y += 1f;
-                if (Input.GetKey(KeyCode.G)) keyboardDirection.y -= 1f;
-            }
-            if (keyboardDirection.sqrMagnitude > 0f)
-            {
-                return Vector2.ClampMagnitude(keyboardDirection, 1f);
-            }
-
-            if (controlProfile == PrototypeControlProfile.PlayerTwo)
-            {
-                return Vector2.zero;
-            }
-
-            // Ignore the legacy keyboard contribution to these axes while WASD is held;
-            // otherwise they serve as the gamepad attack stick.
-            if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.A) ||
-                Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.D))
-            {
-                return Vector2.zero;
-            }
-
-            return Vector2.ClampMagnitude(
-                new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical")), 1f);
-        }
-
-        private void StartAttack(PrototypeAttack attack, float duration)
-        {
-            currentAttack = attack;
-            attackDuration = Mathf.Max(0.1f, duration);
-            attackTimer = 0f;
-            attackConnected = false;
-            currentSpeed = 0f;
-            currentSideSpeed = 0f;
-        }
-
-        private void UpdateAttackHitbox()
-        {
-            Vector3 center;
-            Vector3 size;
-            Quaternion rotation;
-            if (!TryGetActiveHitbox(out center, out size, out rotation))
-            {
-                SetHitboxVisualActive(false);
-                return;
-            }
-
-            UpdateHitboxVisual(center, size, rotation);
-            if (attackConnected || opponentTarget == null)
-            {
-                return;
-            }
-
-            int hitCount = Physics.OverlapBoxNonAlloc(
-                center,
-                size * 0.5f,
-                hitboxResults,
-                rotation,
-                ~0,
-                QueryTriggerInteraction.Collide);
-
-            for (int i = 0; i < hitCount; i++)
-            {
-                Collider candidate = hitboxResults[i];
-                if (candidate == null || candidate.transform.IsChildOf(transform))
-                {
-                    continue;
-                }
-
-                Transform candidateTransform = candidate.transform;
-                bool belongsToOpponent = candidateTransform == opponentTarget ||
-                                         candidateTransform.IsChildOf(opponentTarget) ||
-                                         opponentTarget.IsChildOf(candidateTransform);
-                if (!belongsToOpponent)
-                {
-                    continue;
-                }
-
-                attackConnected = true;
-                if (opponentHealth == null)
-                {
-                    opponentHealth = FindOpponentHealth(opponentTarget);
-                }
-                if (opponentDummy == null)
-                {
-                    opponentDummy = FindOpponentDummy(opponentTarget);
-                }
-
-                float damage = GetAttackDamage();
-                bool strongAttack = currentAttack == PrototypeAttack.HighKick ||
-                                    currentAttack == PrototypeAttack.StepTeep;
-                bool matchWon = false;
-                if (opponentHealth != null)
-                {
-                    matchWon = opponentHealth.ReceiveDamage(damage, strongAttack);
-                }
-                if (opponentDummy != null)
-                {
-                    opponentDummy.ReactToHit(
-                        transform.forward,
-                        damage,
-                        currentAttack == PrototypeAttack.StepTeep || matchWon);
-                }
-                if (matchWon)
-                {
-                    if (matchFlow == null)
-                    {
-                        matchFlow = FindObjectOfType<PrototypeRingOutReset>();
-                    }
-                    if (matchFlow != null)
-                    {
-                        string winner = controlProfile == PrototypeControlProfile.PlayerTwo
-                            ? "PLAYER 2"
-                            : "PLAYER 1";
-                        matchFlow.DeclareWinner(winner);
-                    }
-                }
-                if (hitboxMaterial != null)
-                {
-                    hitboxMaterial.color = connectedHitboxColor;
-                }
-                break;
-            }
-        }
-
-        private float GetAttackDamage()
-        {
-            switch (currentAttack)
-            {
-                case PrototypeAttack.StraightPunch:
-                    return 8f;
-                case PrototypeAttack.HighKick:
-                    return 16f;
-                case PrototypeAttack.LowKick:
-                    return 11f;
-                case PrototypeAttack.StepTeep:
-                    return 18f;
-                default:
-                    return 0f;
-            }
-        }
-
-        private static PrototypeDamageHealth FindOpponentHealth(Transform target)
-        {
-            if (target == null)
-            {
-                return null;
-            }
-
-            PrototypeDamageHealth health = target.GetComponent<PrototypeDamageHealth>();
-            if (health == null)
-            {
-                health = target.GetComponentInParent<PrototypeDamageHealth>();
-            }
-            if (health == null)
-            {
-                health = target.GetComponentInChildren<PrototypeDamageHealth>();
-            }
-            return health;
-        }
-
-        private static PrototypeDummyOpponent FindOpponentDummy(Transform target)
-        {
-            if (target == null)
-            {
-                return null;
-            }
-
-            PrototypeDummyOpponent dummy = target.GetComponent<PrototypeDummyOpponent>();
-            if (dummy == null)
-            {
-                dummy = target.GetComponentInParent<PrototypeDummyOpponent>();
-            }
-            if (dummy == null)
-            {
-                dummy = target.GetComponentInChildren<PrototypeDummyOpponent>();
-            }
-            return dummy;
-        }
-
-        private bool TryGetActiveHitbox(out Vector3 center, out Vector3 size, out Quaternion rotation)
-        {
-            center = Vector3.zero;
-            size = Vector3.zero;
-            rotation = transform.rotation;
-            if (currentAttack == PrototypeAttack.None || attackDuration <= 0f)
-            {
-                return false;
-            }
-
-            float normalizedTime = Mathf.Clamp01(attackTimer / attackDuration);
-            float activeStart;
-            float activeEnd;
-            float forwardOffset;
-            float height;
-
-            switch (currentAttack)
-            {
-                case PrototypeAttack.StraightPunch:
-                    activeStart = 0.2f;
-                    activeEnd = 0.5f;
-                    forwardOffset = 0.72f;
-                    height = 1.25f;
-                    size = new Vector3(0.5f, 0.32f, 0.56f);
-                    break;
-
-                case PrototypeAttack.HighKick:
-                    activeStart = 0.28f;
-                    activeEnd = 0.56f;
-                    forwardOffset = 0.76f;
-                    height = 1.38f;
-                    size = new Vector3(0.55f, 0.46f, 0.62f);
-                    break;
-
-                case PrototypeAttack.LowKick:
-                    activeStart = 0.23f;
-                    activeEnd = 0.55f;
-                    forwardOffset = 0.68f;
-                    height = 0.46f;
-                    size = new Vector3(0.58f, 0.3f, 0.64f);
-                    break;
-
-                case PrototypeAttack.StepTeep:
-                    activeStart = 0.32f;
-                    activeEnd = 0.64f;
-                    forwardOffset = 0.88f;
-                    height = 0.94f;
-                    size = new Vector3(0.58f, 0.42f, 0.68f);
-                    break;
-
-                default:
-                    return false;
-            }
-
-            if (normalizedTime < activeStart || normalizedTime > activeEnd)
-            {
-                return false;
-            }
-
-            center = transform.position + transform.forward * forwardOffset + Vector3.up * height;
-            return true;
-        }
-
-        private void UpdateHitboxVisual(Vector3 center, Vector3 size, Quaternion rotation)
-        {
-            if (!showHitboxes)
-            {
-                SetHitboxVisualActive(false);
-                return;
-            }
-
-            EnsureHitboxVisual();
-            hitboxVisual.transform.SetPositionAndRotation(center, rotation);
-            hitboxVisual.transform.localScale = size;
-            hitboxMaterial.color = attackConnected ? connectedHitboxColor : activeHitboxColor;
-            SetHitboxVisualActive(true);
-        }
-
-        private void EnsureHitboxVisual()
-        {
-            if (hitboxVisual != null)
-            {
-                return;
-            }
-
-            hitboxVisual = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            hitboxVisual.name = "Active Attack Hitbox (Demo)";
-            hitboxVisual.hideFlags = HideFlags.DontSave;
-
-            Collider visualCollider = hitboxVisual.GetComponent<Collider>();
-            if (visualCollider != null)
-            {
-                Destroy(visualCollider);
-            }
-
-            hitboxRenderer = hitboxVisual.GetComponent<Renderer>();
-            Shader shader = Shader.Find("Sprites/Default");
-            if (shader == null)
-            {
-                shader = Shader.Find("Unlit/Color");
-            }
-            hitboxMaterial = new Material(shader);
-            hitboxMaterial.name = "Runtime Hitbox Material";
-            hitboxMaterial.color = activeHitboxColor;
-            hitboxRenderer.sharedMaterial = hitboxMaterial;
-        }
-
-        private void SetHitboxVisualActive(bool active)
-        {
-            if (hitboxVisual != null && hitboxVisual.activeSelf != active)
-            {
-                hitboxVisual.SetActive(active);
-            }
-        }
-
-        private float GetTeepStepEnvelope()
-        {
-            if (currentAttack != PrototypeAttack.StepTeep || attackDuration <= 0f)
-            {
-                return 0f;
-            }
-
-            float normalizedTime = Mathf.Clamp01(attackTimer / attackDuration);
-            if (normalizedTime >= 0.68f)
-            {
-                return 0f;
-            }
-
-            return Mathf.Sin((normalizedTime / 0.68f) * Mathf.PI);
+            fighterCombat.ResolveHitbox();
         }
 
         private void LateUpdate()
@@ -764,10 +173,10 @@ namespace FightingGame.Prototype
             pose.bodyPosition = baseBodyPosition;
             pose.bodyRotation = baseBodyRotation;
 
-            float movementBlend = Mathf.Clamp01(CurrentPlanarSpeed / moveSpeed);
+            float movementBlend = Mathf.Clamp01(CurrentPlanarSpeed / fighterMotor.MoveSpeed);
             float idleWave = Mathf.Sin(Time.time * idleBreathSpeed * 0.55f * Mathf.PI * 2f) * idleMotionScale;
-            float stepWave = Mathf.Sin(stepClock * Mathf.PI * 2f);
-            float oppositeStep = Mathf.Sin((stepClock + 0.5f) * Mathf.PI * 2f);
+            float stepWave = Mathf.Sin(fighterMotor.StepClock * Mathf.PI * 2f);
+            float oppositeStep = Mathf.Sin((fighterMotor.StepClock + 0.5f) * Mathf.PI * 2f);
 
             // Restrained breathing with the arms hanging naturally beside the torso.
             AddMuscle("Spine Front-Back", -0.04f + idleWave * 0.006f);
@@ -863,9 +272,9 @@ namespace FightingGame.Prototype
 
         private void ApplyFallbackPose()
         {
-            float movementBlend = Mathf.Clamp01(CurrentPlanarSpeed / moveSpeed);
+            float movementBlend = Mathf.Clamp01(CurrentPlanarSpeed / fighterMotor.MoveSpeed);
             float idleWave = Mathf.Sin(Time.time * idleBreathSpeed * 0.55f * Mathf.PI * 2f) * idleMotionScale;
-            float stepWave = Mathf.Sin(stepClock * Mathf.PI * 2f);
+            float stepWave = Mathf.Sin(fighterMotor.StepClock * Mathf.PI * 2f);
 
             if (fallbackHips != null)
             {
@@ -931,7 +340,7 @@ namespace FightingGame.Prototype
 
         private void ApplyHumanoidBlock()
         {
-            if (!isBlocking)
+            if (!IsBlocking)
             {
                 return;
             }
@@ -947,7 +356,7 @@ namespace FightingGame.Prototype
 
         private void ApplyFallbackBlock()
         {
-            if (!isBlocking)
+            if (!IsBlocking)
             {
                 return;
             }
@@ -979,7 +388,7 @@ namespace FightingGame.Prototype
                 return;
             }
 
-            switch (currentAttack)
+            switch (fighterCombat.CurrentAttack)
             {
                 case PrototypeAttack.StraightPunch:
                     AddMuscle("Right Arm Down-Up", 0.66f * amount);
@@ -1025,7 +434,7 @@ namespace FightingGame.Prototype
             Vector3 target;
             Vector3 pole;
 
-            switch (currentAttack)
+            switch (fighterCombat.CurrentAttack)
             {
                 case PrototypeAttack.StraightPunch:
                     if (TryGetFallbackChain("arm right shoulder 2", "arm right elbow", "arm right wrist", out root, out mid, out end))
@@ -1119,21 +528,7 @@ namespace FightingGame.Prototype
 
         private float GetAttackEnvelope()
         {
-            if (currentAttack == PrototypeAttack.None || attackDuration <= 0f)
-            {
-                return 0f;
-            }
-
-            float normalizedTime = Mathf.Clamp01(attackTimer / attackDuration);
-            if (normalizedTime < 0.22f)
-            {
-                return Mathf.SmoothStep(0f, 1f, normalizedTime / 0.22f);
-            }
-            if (normalizedTime < 0.52f)
-            {
-                return 1f;
-            }
-            return Mathf.SmoothStep(1f, 0f, (normalizedTime - 0.52f) / 0.48f);
+            return fighterCombat != null ? fighterCombat.AttackEnvelope : 0f;
         }
 
         private void AddMuscle(string muscleName, float amount)
@@ -1153,14 +548,6 @@ namespace FightingGame.Prototype
                 poseHandler = null;
             }
 
-            if (hitboxVisual != null)
-            {
-                Destroy(hitboxVisual);
-            }
-            if (hitboxMaterial != null)
-            {
-                Destroy(hitboxMaterial);
-            }
         }
 
         private void OnGUI()
@@ -1183,10 +570,19 @@ namespace FightingGame.Prototype
             GUI.Label(new Rect(panel.x + 14f, panel.y + 154f, width - 28f, 22f), "Gamepad: hold RB and flick attack stick Back → Forward");
 
             string state;
-            if (currentAttack != PrototypeAttack.None) state = "Attack: " + currentAttack + (attackConnected ? "  HIT" : string.Empty);
-            else if (isBlocking) state = "State: Blocking";
+            if (fighterCombat != null && fighterCombat.IsAttacking)
+            {
+                string moveName = fighterCombat.CurrentMove != null
+                    ? fighterCombat.CurrentMove.displayName
+                    : fighterCombat.CurrentAttack.ToString();
+                string result = fighterCombat.LastHitWasBlocked
+                    ? "  BLOCKED"
+                    : fighterCombat.AttackConnected ? "  HIT" : string.Empty;
+                state = "Attack: " + moveName + "  F" + fighterCombat.CurrentMoveFrame + result;
+            }
+            else if (IsBlocking) state = "State: Blocking";
             else if (IsBackdashing) state = "State: Backdash";
-            else if (isRunning) state = "State: Running";
+            else if (IsRunning) state = "State: Running";
             else state = IsMoving ? "State: Moving" : "State: Idle";
             GUI.Label(new Rect(panel.x + 14f, panel.y + 174f, width - 28f, 20f), state);
         }

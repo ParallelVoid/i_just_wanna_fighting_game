@@ -166,6 +166,15 @@ PrefabInstance:
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: d43e3f77e4990401fa092ae039746fe5, type: 3}
       insertIndex: -1
+      addedObject: {fileID: 6596923277690757901}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: d43e3f77e4990401fa092ae039746fe5, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6104449386068077719}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: d43e3f77e4990401fa092ae039746fe5, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 3575967269711223311}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: d43e3f77e4990401fa092ae039746fe5, type: 3}
+      insertIndex: -1
       addedObject: {fileID: 1751802941681235565}
   m_SourcePrefab: {fileID: 100100000, guid: d43e3f77e4990401fa092ae039746fe5, type: 3}
 --- !u!1 &6706245002881332427 stripped
@@ -173,6 +182,60 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: d43e3f77e4990401fa092ae039746fe5, type: 3}
   m_PrefabInstance: {fileID: 5895273061312612762}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &6596923277690757901
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6706245002881332427}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e2b3ab1d6e894458bb0cfb76a9232e8f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  controlProfile: 0
+--- !u!114 &6104449386068077719
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6706245002881332427}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61220987e76847f7a3d5bc3c5f4f0a9d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  straightPunch: {fileID: 11400000, guid: 4556d758db98a42ac8976611238d711e, type: 2}
+  highKick: {fileID: 11400000, guid: 63e6dd4a7c3564cbebf1d5df705019e3, type: 2}
+  lowKick: {fileID: 11400000, guid: 9bef22211f81c456abda773ef32fab74, type: 2}
+  stepTeep: {fileID: 11400000, guid: 453d2cb5a339949eeb0e1a7a21dfa938, type: 2}
+  teepSequenceWindow: 0.42
+  showHitboxes: 1
+  activeHitboxColor: {r: 1, g: 0.12, b: 0.08, a: 0.3}
+  connectedHitboxColor: {r: 0.15, g: 1, b: 0.25, a: 0.38}
+--- !u!114 &3575967269711223311
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6706245002881332427}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bfd8c65b1d5c44a6924f9572d4fc8725, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  moveSpeed: 2.25
+  acceleration: 14
+  pushboxRadius: 0.42
+  doubleTapWindow: 0.24
+  runSpeedMultiplier: 1.65
+  backdashSpeed: 5.4
+  backdashDuration: 0.32
+  teepStepSpeed: 2.4
+  stepFrequency: 2.3
 --- !u!114 &1751802941681235565
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -185,28 +248,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b49943be9a8c14edd991104aaed16ec0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  moveSpeed: 2.25
-  acceleration: 14
   opponentTarget: {fileID: 0}
   playerControlled: 1
   controlProfile: 0
   showControlHelp: 1
-  pushboxRadius: 0.42
-  doubleTapWindow: 0.24
-  runSpeedMultiplier: 1.65
-  backdashSpeed: 5.4
-  backdashDuration: 0.32
   idleBreathSpeed: 1.7
   idleBobAmount: 0.008
   idleMotionScale: 0.18
-  stepFrequency: 2.3
   stepAmount: 0.28
-  punchDuration: 0.42
-  highKickDuration: 0.62
-  lowKickDuration: 0.5
-  teepDuration: 0.72
-  teepSequenceWindow: 0.42
-  teepStepSpeed: 2.4
-  showHitboxes: 1
-  activeHitboxColor: {r: 1, g: 0.12, b: 0.08, a: 0.3}
-  connectedHitboxColor: {r: 0.15, g: 1, b: 0.25, a: 0.38}

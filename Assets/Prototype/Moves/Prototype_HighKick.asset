@@ -1,0 +1,56 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c95f8756e37e44589bed4878e586f311, type: 3}
+  m_Name: Prototype_HighKick
+  m_EditorClassIdentifier: 
+  moveId: high_kick
+  displayName: High Kick
+  inputCommand: AttackUp
+  requiredFighterStates: 00000000010000000200000003000000
+  startupFrames: 10
+  activeFrames: 12
+  recoveryFrames: 15
+  damage: 16
+  chipDamage: 0
+  hitstunFrames: 14
+  blockstunFrames: 10
+  defaultHitLevel: 0
+  counterHitBonusStunFrames: 6
+  counterHitKnockdown: 0
+  pushbackOnHit: 0.25
+  pushbackOnBlock: 0.15
+  knockdownType: 0
+  trackingStrength: 0
+  cancelCategories: 0
+  cancelWindowStartFrame: 0
+  cancelWindowEndFrame: 0
+  meterCost: 0
+  meterGainOnWhiff: 2
+  meterGainOnHit: 6
+  meterGainOnBlock: 3
+  hitboxes:
+  - label: high_kick
+    shape: 2
+    size: {x: 0.275, y: 0.23, z: 0.31}
+    attachedBoneName: 
+    localPosition: {x: 0, y: 1.38, z: 0.76}
+    localEulerRotation: {x: 0, y: 0, z: 0}
+    startFrame: 10
+    endFrame: 21
+    hitLevel: 0
+    hitPriority: 0
+    damageOverride: -1
+    hitstunOverride: -1
+  animationStateName: HighKick
+  soundEvents: []
+  effectEvents: []
+  requiredVariationId: 
