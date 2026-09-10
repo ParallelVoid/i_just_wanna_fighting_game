@@ -15,7 +15,7 @@ MonoBehaviour:
   moveId: low_kick
   displayName: Low Kick
   inputCommand: AttackDown
-  requiredFighterStates: 00000000010000000200000003000000
+  requiredFighterStates: 00000000010000000200000003000000i
   startupFrames: 7
   activeFrames: 10
   recoveryFrames: 13

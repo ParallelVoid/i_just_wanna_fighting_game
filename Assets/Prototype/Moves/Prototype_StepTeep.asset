@@ -15,7 +15,7 @@ MonoBehaviour:
   moveId: step_teep
   displayName: Stepping Teep
   inputCommand: ForwardHeld+Back,Neutral,Forward
-  requiredFighterStates: 00000000010000000200000003000000
+  requiredFighterStates: 00000000010000000200000003000000i
   startupFrames: 14
   activeFrames: 14
   recoveryFrames: 15

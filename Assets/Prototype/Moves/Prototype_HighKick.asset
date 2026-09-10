@@ -15,7 +15,7 @@ MonoBehaviour:
   moveId: high_kick
   displayName: High Kick
   inputCommand: AttackUp
-  requiredFighterStates: 00000000010000000200000003000000
+  requiredFighterStates: 00000000010000000200000003000000i
   startupFrames: 10
   activeFrames: 12
   recoveryFrames: 15

@@ -7,7 +7,7 @@ Mesh:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: Prototype_Octagon
-  serializedVersion: 11
+  serializedVersion: 12
   m_SubMeshes:
   - serializedVersion: 2
     firstByte: 0
@@ -32,10 +32,10 @@ Mesh:
     m_Data: 
   m_MeshCompression: 0
   m_IsReadable: 1
-  m_KeepVertices: 1
-  m_KeepIndices: 1
+  m_KeepVertices: 0
+  m_KeepIndices: 0
   m_IndexFormat: 0
-  m_IndexBuffer: 00000300020001000a000b00020003000b0002000b000a0000000400030001000b000c00030004000c0003000c000b0000000500040001000c000d00040005000d0004000d000c0000000600050001000d000e00050006000e0005000e000d0000000700060001000e000f00060007000f0006000f000e0000000800070001000f001000070008001000070010000f00000009000800010010001100080009001100080011001000000002000900010011000a00090002000a0009000a001100
+  m_IndexBuffer: 00000300020001000a000b00020003000b0002000b000a0000000400030001000b000c00030004000c0003000c000b0000000500040001000c000d00040005000d0004000d000c0000000600050001000d000e00050006000e0005000e000d0000000700060001000e000f00060007000f0006000f000e0000000800070001000f001000070008001000070010000f00000009000800010010001100080009001100080011001000000002000900010011000a00090002000a0009000a001100y
   m_VertexData:
     serializedVersion: 3
     m_VertexCount: 18
@@ -153,15 +153,29 @@ Mesh:
   m_LocalAABB:
     m_Center: {x: 0, y: 0, z: 0}
     m_Extent: {x: 4.6193976, y: 0.075, z: 4.6193976}
-  m_MeshUsageFlags: 0
   m_CookingOptions: 30
+  m_PreBakeConvexCollisionMesh: 0
+  m_PreBakeTriangleCollisionMesh: 0
   m_BakedConvexCollisionMesh: 
   m_BakedTriangleCollisionMesh: 
-  m_MeshMetrics[0]: 1
-  m_MeshMetrics[1]: 1
+  'm_MeshMetrics[0]': 1
+  'm_MeshMetrics[1]': 1
   m_MeshOptimizationFlags: 1
   m_StreamData:
     serializedVersion: 2
     offset: 0
     size: 0
     path: 
+  m_MeshLodInfo:
+    serializedVersion: 2
+    m_LodSelectionCurve:
+      serializedVersion: 1
+      m_LodSlope: 0
+      m_LodBias: 0
+    m_NumLevels: 1
+    m_SubMeshes:
+    - serializedVersion: 2
+      m_Levels:
+      - serializedVersion: 1
+        m_IndexStart: 0
+        m_IndexCount: 0
