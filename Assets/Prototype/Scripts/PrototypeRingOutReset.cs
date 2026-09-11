@@ -53,7 +53,7 @@ namespace FightingGame.Prototype
             CaptureSpawnState();
         }
 
-        private void Update()
+        public void SimulateTick()
         {
             if (!initialized || player == null || opponent == null || platformRenderer == null)
             {
@@ -62,7 +62,7 @@ namespace FightingGame.Prototype
 
             if (!string.IsNullOrEmpty(matchWinner))
             {
-                matchEndTimer += Time.deltaTime;
+                matchEndTimer += CombatClock.StepSeconds;
                 if (matchEndTimer >= matchResetDelay)
                 {
                     ResetBothFighters();
@@ -83,9 +83,9 @@ namespace FightingGame.Prototype
                 return;
             }
 
-            fallingTime += Time.deltaTime;
+            fallingTime += CombatClock.StepSeconds;
             float fallSpeed = initialFallSpeed + fallingTime * fallAcceleration;
-            fallingFighter.position += Vector3.down * fallSpeed * Time.deltaTime;
+            fallingFighter.position += Vector3.down * fallSpeed * CombatClock.StepSeconds;
 
             if (fallingTime >= fallDuration)
             {

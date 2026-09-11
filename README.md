@@ -4,7 +4,7 @@ Design specification, prototype status, and development roadmap for a 3D martial
 
 > Status: early combat prototype. Current content is for control, camera, movement, and animation experiments—not production gameplay.
 
-Last updated: September 3, 2026.
+Last updated: September 11, 2026.
 
 ## Start here
 
@@ -14,7 +14,9 @@ If the generated prototype scene is missing or stale, run:
 
 `Tools → Jin Prototype → Rebuild Sample Scene`
 
-The single most valuable next task is to build a **fixed-frame hit/hurtbox exchange**: convert the three visual attacks into data-driven moves, give the opponent hurtboxes and health, and prove that attacks can hit, be blocked, miss, and cause deterministic reactions. This should happen before adding more characters or many more attacks.
+Current priority: introduce **one shared 60 Hz combat tick**, then finish **one original character model**. Data-driven attacks, prototype collisions, accumulated damage, finisher wins, and shared-keyboard local versus already exist.
+
+**Production gate:** do not implement new rules for who can act next after contact (authored hitstun, blockstun, frame advantage, counter-hit timing, or move-specific reaction pushback) until the first original character model is finished. Preserve the existing prototype guard, recoil, and knockdown behavior while consolidating timing.
 
 ## Document map
 
@@ -158,7 +160,9 @@ Both Jins can attack, accumulate damage, recoil, suffer the teep knockdown, and 
 
 - Forward and backward are always relative to the opponent.
 - Sidestep follows the tangent of the current fight line, creating an arc around the opponent.
-- Jin continually rotates to face the opponent.
+- Outside committed attacks, Jin continually rotates to face the opponent.
+- Starting an attack commits the fighter's facing direction through startup, active, and recovery; sidestepping cannot make the attacker rotate mid-move.
+- After recovery, the attacker turns back toward the opponent at `360°/s` instead of snapping to the new fight-line angle. This speed is configurable on `PrototypeFighterMotor`.
 - The camera follows the midpoint and stays perpendicular to the fight line.
 - Diagonal input is normalized to prevent unintended speed increases.
 - Double-tap window: 0.24 seconds by default.
@@ -191,6 +195,8 @@ Every prototype attack now reads its collision volumes from the move asset's `Hi
 
 Contact is latched once per attack. Damage, hit level, knockdown type, and optional per-hitbox damage overrides come from move data. The current single guard blocks high, mid, and low attacks; throws and unblockables bypass it. Dedicated hitstun, blockstun, pushback, hit stop, priority clashes, and multi-hit rules remain future work.
 
+The root-space boxes deliberately use narrow lateral half-extents (`0.10–0.16 m`) while retaining their original height and forward reach. Fighter hurt capsules use a `0.23 m` world-space radius. Combined with committed attack facing, this allows a clean sidestep to leave the attack lane instead of being caught by oversized diagnostic collision volumes.
+
 ### Accumulated-damage condition monitor
 
 The prototype opponent uses a Buriki One-inspired accumulated-damage system instead of a conventional bar that empties from full health. Successful attacks add damage toward and beyond a 100% danger reference:
@@ -206,7 +212,7 @@ The top-right monitor presents the condition as a continuously moving sinusoidal
 
 Actual damage rises with the defender's existing accumulated percentage. The multiplier scales linearly from `1.0x` at 0% to `1.75x` at 100% and remains capped at `1.75x` beyond that point. This makes later clean hits increase the percentage faster than early hits.
 
-Accumulated damage begins recovering after 2.5 seconds without taking another hit. It then falls toward 0% at 3 percentage points per second. Any new hit immediately pauses recovery and restarts the delay, rewarding sustained pressure while still allowing a defender to recover during a long disengagement.
+The current scenes and component defaults begin recovering accumulated damage after 3 seconds without taking another hit. It then falls toward 0% at 1.5 percentage points per second. Any new hit immediately pauses recovery and restarts the delay, rewarding sustained pressure while still allowing a defender to recover during a long disengagement.
 
 The high kick and stepping teep are strong finishers. Weak attacks may build the opponent to or beyond 100%, but only a confirmed strong finisher that brings the defender to 100% or more wins the match. The loser is knocked down, both controls freeze, a winner message is shown for 2.25 seconds, and then positions, damage, reactions, and the timer reset for another round.
 
@@ -282,17 +288,21 @@ Recommended fix:
 
 Input sampling, locomotion, and combat resolution are now separate components. `JinPrototypeController` remains the compatibility-facing coordinator and temporary procedural presentation used by the prototype scenes. Its next extraction should move the procedural rig code into a replaceable presentation component.
 
-### The combat simulation is currently hybrid
+### Shared combat timing and remaining determinism limits
 
-Attacks now advance through startup, active, and recovery frames using a 60 Hz accumulator, but movement and command sampling still run from `Update()`. The next determinism step is one shared fixed combat clock that records input and advances every fighter exactly once per tick.
+`CombatClock` is created automatically at runtime by the fighter controllers, so existing scenes do not need to be rebuilt. It consumes scaled elapsed time in 1/60-second ticks. Each tick advances existing reactions, damage recovery, and the countdown; prepares both fighters' commands; moves both fighters; synchronizes collision transforms; resolves contact; advances move frames; and checks ring-out/reset flow. Catch-up ticks each perform collision checks, including an active window that falls entirely between rendered frames.
+
+Legacy input is sampled once per render frame. Button edges and attack-direction transitions (including neutral) are queued and consumed once per tick. Held inputs persist across catch-up ticks; analog changes within the same command region are coalesced to avoid an input backlog. This is a short input handoff, not a training-mode recorder or a cancel buffer. Inputs that begin and end entirely between raw input samples cannot be recovered.
+
+Camera smoothing, procedural skeletal posing, and condition-monitor drawing remain presentation updates. The clock does not yet guarantee cross-platform deterministic replay: Unity overlap queries, bone-attached volumes driven by rendered poses, and sequential pushbox resolution remain limitations. Contacts resolve in Player 1 then Player 2 order with the existing interruption behavior; simultaneous trades and priority clashes are deferred. No new hitstun, blockstun, frame-advantage, or authored pushback rules are introduced.
 
 ### The two-player scene is keyboard-only
 
 `SampleScene` keeps the second Jin passive for focused testing. `TwoPlayerSampleScene` enables both fighters, but device assignment and separate gamepad profiles are not implemented yet.
 
-### There are no real combat collisions
+### Collision shapes are still prototypes
 
-The current hitboxes, capsule-shaped hurt volumes, and circular fighter pushboxes are procedural prototype diagnostics rather than authored move data. Throw boxes and guard-level collision rules are not implemented.
+Attack hitboxes are authored in move assets. Hurt volumes use a single capsule per fighter, and pushboxes use ground-plane circles. Per-limb hurtboxes, throw boxes, and guard-level collision rules are not implemented.
 
 ## Current project structure
 
@@ -300,11 +310,13 @@ The current hitboxes, capsule-shaped hurt volumes, and circular fighter pushboxe
 Assets/
 ├── Prototype/
 │   ├── Editor/
+│   │   ├── CombatClockChecks.cs
 │   │   └── JinPrototypeSetup.cs
 │   ├── Materials/
 │   ├── Prefabs/
 │   │   └── JinPrototype.prefab
 │   └── Scripts/
+│       ├── CombatClock.cs
 │       ├── JinPrototypeController.cs
 │       ├── PrototypeFighterInput.cs
 │       ├── PrototypeFighterCombat.cs
@@ -326,6 +338,10 @@ Assets/
 
 ### Script responsibilities
 
+#### `CombatClock`
+
+Owns the shared 60 Hz accumulator and tick index, input capture, phased fighter updates, collision synchronization, and existing reaction/damage/countdown/round timing. Controllers register and unregister on enable/disable. Existing scenes register at runtime; code that adds health, reaction, timer, or round components later should call `RefreshParticipants()`.
+
 #### `JinPrototypeController`
 
 Currently coordinates the extracted modules and handles:
@@ -336,7 +352,7 @@ Currently coordinates the extracted modules and handles:
 
 #### `PrototypeFighterInput`
 
-Handles raw Player 1 / Player 2 keyboard bindings and Player 1 gamepad sampling. It returns a control snapshot and contains no movement or combat decisions.
+Handles raw Player 1 / Player 2 keyboard bindings and Player 1 gamepad sampling. It samples control snapshots and buffers transitions for the shared tick, without making movement or combat decisions.
 
 #### `PrototypeFighterCombat`
 
@@ -575,11 +591,19 @@ Variation rules:
 
 ## What should be developed next
 
-### Immediate next milestone: a real two-fighter combat exchange
+### Immediate milestone: shared timing, then one original character
 
-Do not add a large roster or many more procedural attacks yet. The next milestone should prove that one fighter can hit, block, and affect another fighter under deterministic rules.
+The shared clock is a timing foundation, not a defender-reaction redesign. The first original character takes priority over the deferred combat roadmap below.
 
-Recommended order:
+### Three ideas for the next course of action
+
+1. **Finish the first original fighter (recommended).** Establish martial art, silhouette, proportions, costume, and a front/side/back reference sheet; then produce the mesh, UVs, textures, and rig. Completion means a textured, rigged original character imported into Unity at the correct scale, with shoulders, hips, elbows, and knees passing idle, walk, punch, and kick deformation checks. This is the gate before new post-contact rules.
+2. **Prepare a replaceable character presentation component.** Extract Jin-specific procedural posing from the controller and define a configurable rig/bone mapping. Prove a model can be swapped without changing movement, move data, or combat timing. This supports the original model while it is being made.
+3. **Build a character preview scene.** Add turntable, lighting presets, and idle/walk/punch/kick pose previews to inspect proportions, materials, foot placement, and deformation on the incoming model. Keep it focused on asset review; frame advantage and defender-state tools remain deferred.
+
+### Longer-term roadmap (subject to the original-character gate)
+
+The following items describe future work, not authorization to bypass that gate.
 
 #### 1. Stabilize the input and state code
 
@@ -597,18 +621,16 @@ Acceptance criteria:
 - Opposite movement buttons always produce block when permitted.
 - Attack directions never accidentally move the fighter.
 
-#### 2. Add a fixed 60 Hz combat clock
+#### 2. Shared 60 Hz combat clock — implemented
 
-- Sample input into frame records.
-- Advance gameplay at exactly 60 simulation ticks per second.
-- Convert attack durations from seconds to startup/active/recovery frame counts.
-- Keep camera and animation interpolation in the presentation layer.
+- [x] Advance both fighters through one clock with fixed tick durations.
+- [x] Check hitboxes on every tick, including catch-up ticks.
+- [x] Use shared time for movement gestures, teep commands, existing reactions, damage recovery, countdown, and resets.
+- [x] Preserve sampled input transitions between ticks without repeating button edges.
+- [x] Keep camera and skeletal posing in the presentation layer.
+- [ ] Add frame recording/playback and frame-step controls as separate future tools.
 
-Acceptance criteria:
-
-- Recorded inputs produce the same simulation result repeatedly.
-- Frame stepping works in the editor.
-- Rendering frame rate does not change attack timing.
+Validation target: matching tick counts and movement for equal elapsed time at 30, 60, 120, and 144 rendering FPS, with correct startup/active/recovery and one-hit contact during catch-up.
 
 #### 3. Create data-driven moves
 
@@ -619,7 +641,7 @@ Acceptance criteria:
 
 Acceptance criteria:
 
-- Designers can tune startup, active, recovery, damage, and pushback without editing code.
+- Designers can tune startup, active, recovery, damage, and hitboxes without editing code. Authored pushback fields exist but remain unused until the original-character gate is met.
 - Multiple fighters can reference different move sets.
 
 #### 4. Implement hurtboxes, hitboxes, and pushboxes
@@ -637,7 +659,7 @@ Acceptance criteria:
 - Fighters cannot pass through one another during ordinary movement.
 - Debug colors clearly distinguish hitboxes, hurtboxes, and pushboxes.
 
-#### 5. Add defender reactions
+#### 5. Add defender reactions — after the original model is finished
 
 - Health
 - High/mid/low guard rules
@@ -690,13 +712,15 @@ Only after the shared combat system works:
 
 ## Suggested short-term backlog
 
+Complete the original-character milestone before starting the post-contact items in Sprints B and C. Checked items below describe implemented prototype behavior, not final production systems.
+
 ### Sprint A: combat foundation
 
 - [x] Extract input sampling from `JinPrototypeController`
 - [x] Extract attack, hitbox, damage, and win resolution from `JinPrototypeController`
 - [x] Extract locomotion and movement gestures into a fighter motor
 - [ ] Extract procedural rig posing into a fighter presentation component
-- [ ] Add 60 Hz combat clock
+- [x] Add one shared 60 Hz combat clock
 - [ ] Add frame-by-frame input history
 - [ ] Add explicit fighter states
 - [x] Convert four attacks to frame-based move data
@@ -708,7 +732,7 @@ Only after the shared combat system works:
 - [x] Add attack hitboxes
 - [x] Add prototype circular pushboxes
 - [x] Add hit detection
-- [ ] Add health and damage
+- [x] Add accumulated damage and finisher wins
 - [ ] Add hitstop
 - [ ] Add hitstun and pushback
 
@@ -717,7 +741,7 @@ Only after the shared combat system works:
 - [ ] Connect block pose to actual guard rules
 - [ ] Add high/mid/low resolution
 - [ ] Add blockstun and chip rules
-- [ ] Add knockdown
+- [x] Add prototype knockdown reaction
 - [ ] Add round timer and win conditions
 - [ ] Integrate ring-out as a round result
 
@@ -754,6 +778,12 @@ A meaningful vertical slice should contain:
 Online play is not required for the first vertical slice, but simulation and input design should avoid choices that make rollback networking impossible later.
 
 ## Testing checklist
+
+Run `Tools → Jin Prototype → Validate Shared Combat Clock` for automated play-mode regression checks in an empty test scene. Save your work first; the command offers to save modified scenes before entering the test scene. The checks cover buffered button edges and neutral transitions, analog coalescing, startup/active/recovery, a one-frame active window during catch-up, one-hit latching, block, whiff, equal movement/tick counts across render rates, and damage-recovery timing.
+
+For unattended validation, use Unity's `-batchmode -nographics -projectPath <project> -executeMethod FightingGame.EditorTools.CombatClockChecks.RunBatch -logFile <log>` (without `-quit`; the checks exit with a success/failure code). Prefer a disposable project copy because the existing editor setup automatically regenerates scenes on a fresh editor session.
+
+The manual checklist below remains necessary for model, camera, and local-versus feel.
 
 ### Input
 
