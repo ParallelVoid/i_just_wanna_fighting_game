@@ -119,7 +119,7 @@ namespace FightingGame.Prototype
             RestorePlayerControls();
         }
 
-        private void Update()
+        public void SimulateTick()
         {
             UpdateFlash();
 
@@ -131,16 +131,16 @@ namespace FightingGame.Prototype
 
             if (reactionTimer <= 0f)
             {
-                transform.localScale = Vector3.Lerp(transform.localScale, baseScale, 16f * Time.deltaTime);
+                transform.localScale = Vector3.Lerp(transform.localScale, baseScale, 16f * CombatClock.StepSeconds);
                 return;
             }
 
-            reactionTimer = Mathf.Max(0f, reactionTimer - Time.deltaTime);
+            reactionTimer = Mathf.Max(0f, reactionTimer - CombatClock.StepSeconds);
             float progress = reactionDuration > 0f ? 1f - reactionTimer / reactionDuration : 1f;
             float reactionEnvelope = Mathf.Sin(progress * Mathf.PI);
             float pushEnvelope = (1f - progress) * (1f - progress);
 
-            transform.position += reactionDirection * pushSpeed * pushEnvelope * Time.deltaTime;
+            transform.position += reactionDirection * pushSpeed * pushEnvelope * CombatClock.StepSeconds;
 
             Vector3 leanAxis = Vector3.Cross(Vector3.up, reactionDirection);
             if (leanAxis.sqrMagnitude > 0.0001f)
@@ -164,7 +164,7 @@ namespace FightingGame.Prototype
 
         private void UpdateKnockdown()
         {
-            knockdownTimer += Time.deltaTime;
+            knockdownTimer += CombatClock.StepSeconds;
             float fallEnd = knockdownFallDuration;
             float groundedEnd = fallEnd + knockdownGroundedDuration;
             float recoveryEnd = groundedEnd + knockdownRecoveryDuration;
@@ -177,7 +177,7 @@ namespace FightingGame.Prototype
                 angle = knockdownAngle * fallProgress;
                 heightOffset = -knockdownDrop * fallProgress;
                 float pushEnvelope = 1f - fallProgress;
-                transform.position += reactionDirection * knockdownPushSpeed * pushEnvelope * Time.deltaTime;
+                transform.position += reactionDirection * knockdownPushSpeed * pushEnvelope * CombatClock.StepSeconds;
             }
             else if (knockdownTimer < groundedEnd)
             {
@@ -249,7 +249,7 @@ namespace FightingGame.Prototype
 
             if (flashTimer > 0f)
             {
-                flashTimer = Mathf.Max(0f, flashTimer - Time.deltaTime);
+                flashTimer = Mathf.Max(0f, flashTimer - CombatClock.StepSeconds);
                 float flashAmount = flashDuration > 0f ? flashTimer / flashDuration : 0f;
                 for (int i = 0; i < runtimeMaterials.Length; i++)
                 {

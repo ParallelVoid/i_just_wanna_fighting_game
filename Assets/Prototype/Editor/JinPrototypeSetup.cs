@@ -228,7 +228,7 @@ namespace FightingGame.EditorTools
             CapsuleCollider hurtbox = character.AddComponent<CapsuleCollider>();
             hurtbox.center = character.transform.InverseTransformPoint(bounds.center);
             hurtbox.direction = 1;
-            hurtbox.radius = 0.3f / rootScale;
+            hurtbox.radius = 0.23f / rootScale;
             hurtbox.height = Mathf.Max(
                 hurtbox.radius * 2f,
                 bounds.size.y * 0.94f / rootScale);
@@ -305,19 +305,19 @@ namespace FightingGame.EditorTools
             set.Punch = CreateOrUpdateMove(
                 "Prototype_StraightPunch", "straight_punch", "Straight Punch", "AttackRight",
                 5, 8, 12, 8, HitLevel.High, KnockdownType.None,
-                new Vector3(0f, 1.25f, 0.72f), new Vector3(0.25f, 0.16f, 0.28f));
+                new Vector3(0f, 1.25f, 0.72f), new Vector3(0.10f, 0.16f, 0.28f));
             set.HighKick = CreateOrUpdateMove(
                 "Prototype_HighKick", "high_kick", "High Kick", "AttackUp",
                 10, 12, 15, 16, HitLevel.High, KnockdownType.None,
-                new Vector3(0f, 1.38f, 0.76f), new Vector3(0.275f, 0.23f, 0.31f));
+                new Vector3(0f, 1.38f, 0.76f), new Vector3(0.13f, 0.23f, 0.31f));
             set.LowKick = CreateOrUpdateMove(
                 "Prototype_LowKick", "low_kick", "Low Kick", "AttackDown",
                 7, 10, 13, 11, HitLevel.Low, KnockdownType.None,
-                new Vector3(0f, 0.46f, 0.68f), new Vector3(0.29f, 0.15f, 0.32f));
+                new Vector3(0f, 0.46f, 0.68f), new Vector3(0.16f, 0.15f, 0.32f));
             set.Teep = CreateOrUpdateMove(
                 "Prototype_StepTeep", "step_teep", "Stepping Teep", "ForwardHeld+Back,Neutral,Forward",
                 14, 14, 15, 18, HitLevel.Mid, KnockdownType.HardKnockdown,
-                new Vector3(0f, 0.94f, 0.88f), new Vector3(0.29f, 0.21f, 0.34f));
+                new Vector3(0f, 0.94f, 0.88f), new Vector3(0.11f, 0.21f, 0.34f));
             return set;
         }
 

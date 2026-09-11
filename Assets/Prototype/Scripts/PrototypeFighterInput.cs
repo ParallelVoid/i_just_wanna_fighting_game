@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FightingGame.Prototype
@@ -26,6 +27,60 @@ namespace FightingGame.Prototype
     public sealed class PrototypeFighterInput : MonoBehaviour
     {
         [SerializeField] private PrototypeControlProfile controlProfile = PrototypeControlProfile.PlayerOne;
+
+        private readonly List<PrototypeInputFrame> pending = new List<PrototypeInputFrame>();
+        private PrototypeInputFrame lastCaptured;
+        private PrototypeInputFrame held;
+
+        // Queue changes, not every render sample: retain a tap or neutral transition between ticks.
+        public void Capture() { Capture(Sample()); }
+
+        public void Capture(PrototypeInputFrame frame)
+        {
+            bool transition = frame.ForwardHeld != lastCaptured.ForwardHeld ||
+                frame.BackwardHeld != lastCaptured.BackwardHeld ||
+                AttackRegion(frame.AttackDirection) != AttackRegion(lastCaptured.AttackDirection) ||
+                frame.ForwardPressed || frame.BackwardPressed;
+            if (transition) pending.Add(frame);
+            else if (pending.Count > 0)
+            {
+                // Analog drift within a command region must not create a growing input delay.
+                var previous = pending[pending.Count - 1];
+                frame.ForwardPressed |= previous.ForwardPressed;
+                frame.BackwardPressed |= previous.BackwardPressed;
+                pending[pending.Count - 1] = frame;
+            }
+            else held = frame;
+            lastCaptured = frame;
+        }
+
+        private static int AttackRegion(Vector2 direction)
+        {
+            if (direction.sqrMagnitude < 0.36f) return 0;
+            return 1 | (direction.x < -0.45f ? 2 : 0) | (direction.x > 0.45f ? 4 : 0) |
+                (direction.x > 0.35f ? 8 : 0) | (direction.y > 0.45f ? 16 : 0) |
+                (direction.y < -0.45f ? 32 : 0);
+        }
+
+        public PrototypeInputFrame ConsumeTick()
+        {
+            if (pending.Count > 0)
+            {
+                held = pending[0];
+                pending.RemoveAt(0);
+            }
+            PrototypeInputFrame result = held;
+            held.ForwardPressed = false;
+            held.BackwardPressed = false;
+            return result;
+        }
+
+        public void ClearPendingInput()
+        {
+            pending.Clear();
+            lastCaptured = default(PrototypeInputFrame);
+            held = default(PrototypeInputFrame);
+        }
 
         public PrototypeControlProfile ControlProfile { get { return controlProfile; } }
 

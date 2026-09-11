@@ -40,7 +40,7 @@ MonoBehaviour:
   hitboxes:
   - label: step_teep
     shape: 2
-    size: {x: 0.29, y: 0.21, z: 0.34}
+    size: {x: 0.11, y: 0.21, z: 0.34}
     attachedBoneName: 
     localPosition: {x: 0, y: 0.94, z: 0.88}
     localEulerRotation: {x: 0, y: 0, z: 0}
