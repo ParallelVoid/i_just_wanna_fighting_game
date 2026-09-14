@@ -15,7 +15,7 @@ MonoBehaviour:
   moveId: straight_punch
   displayName: Straight Punch
   inputCommand: AttackRight
-  requiredFighterStates: 00000000010000000200000003000000
+  requiredFighterStates: 00000000010000000200000003000000i
   startupFrames: 5
   activeFrames: 8
   recoveryFrames: 12
