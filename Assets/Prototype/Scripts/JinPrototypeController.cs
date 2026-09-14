@@ -210,7 +210,6 @@ namespace FightingGame.Prototype
             humanoidPoseAvailable = false;
             if (animator == null || animator.avatar == null || !animator.avatar.isValid || !animator.avatar.isHuman)
             {
-                Debug.LogWarning("Jin prototype: the imported avatar is not a valid Humanoid, so the controller is using its bone-based fallback pose.", this);
                 return;
             }
 
