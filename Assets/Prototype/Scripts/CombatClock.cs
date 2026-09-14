@@ -39,7 +39,7 @@ namespace FightingGame.Prototype
                 {
                     int profile = a.GetComponent<PrototypeFighterInput>().ControlProfile.CompareTo(
                         b.GetComponent<PrototypeFighterInput>().ControlProfile);
-                    return profile != 0 ? profile : a.GetInstanceID().CompareTo(b.GetInstanceID());
+                    return profile != 0 ? profile : a.GetEntityId().CompareTo(b.GetEntityId());
                 });
             }
             instance.RefreshParticipants();
