@@ -40,7 +40,7 @@ MonoBehaviour:
   hitboxes:
   - label: high_kick
     shape: 2
-    size: {x: 0.275, y: 0.23, z: 0.31}
+    size: {x: 0.13, y: 0.23, z: 0.31}
     attachedBoneName: 
     localPosition: {x: 0, y: 1.38, z: 0.76}
     localEulerRotation: {x: 0, y: 0, z: 0}
