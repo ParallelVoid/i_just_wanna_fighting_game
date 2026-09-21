@@ -253,6 +253,7 @@ MonoBehaviour:
   playerControlled: 1
   controlProfile: 0
   showControlHelp: 1
+  useHumanoidProceduralPose: 1
   idleBreathSpeed: 1.7
   idleBobAmount: 0.008
   idleMotionScale: 0.18

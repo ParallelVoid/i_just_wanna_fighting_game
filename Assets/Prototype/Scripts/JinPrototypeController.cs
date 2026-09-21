@@ -20,6 +20,7 @@ namespace FightingGame.Prototype
         [SerializeField] private bool showControlHelp = true;
 
         [Header("Procedural pose")]
+        [SerializeField] private bool useHumanoidProceduralPose = true;
         [SerializeField, Min(0f)] private float idleBreathSpeed = 1.7f;
         [SerializeField, Range(0f, 0.04f)] private float idleBobAmount = 0.008f;
         [SerializeField, Range(0f, 1f)] private float idleMotionScale = 0.18f;
@@ -42,6 +43,7 @@ namespace FightingGame.Prototype
         private PrototypeFighterMotor fighterMotor;
         private bool controlsEnabled = true;
         private PrototypeDummyOpponent selfReaction;
+        private JinKoreanAnimationDriver importedAnimationDriver;
         private PrototypeInputFrame tickInput;
 
         public float MoveInput { get { return fighterMotor != null ? fighterMotor.MoveInput : 0f; } }
@@ -80,6 +82,11 @@ namespace FightingGame.Prototype
             showControlHelp = visible;
         }
 
+        public void SetUseHumanoidProceduralPose(bool enabled)
+        {
+            useHumanoidProceduralPose = enabled;
+        }
+
         public void SetControlsEnabled(bool enabled)
         {
             controlsEnabled = enabled;
@@ -107,6 +114,7 @@ namespace FightingGame.Prototype
             controlsEnabled = playerControlled;
             animator = GetComponentInChildren<Animator>();
             selfReaction = GetComponent<PrototypeDummyOpponent>();
+            importedAnimationDriver = GetComponent<JinKoreanAnimationDriver>();
             CacheFallbackRig();
             TryInitializeHumanoidPose();
         }
@@ -182,11 +190,16 @@ namespace FightingGame.Prototype
 
         private void LateUpdate()
         {
+            if (importedAnimationDriver != null && importedAnimationDriver.ShouldDrivePose)
+            {
+                return;
+            }
+
             if (!humanoidPoseAvailable || poseHandler == null || baseMuscles == null)
             {
                 ApplyFallbackPose();
                 ApplyFallbackBlock();
-                ApplyFallbackAttack();
+                if (importedAnimationDriver == null) ApplyFallbackAttack();
                 return;
             }
 
@@ -221,7 +234,7 @@ namespace FightingGame.Prototype
             AddMuscle("Spine Twist Left-Right", stepWave * 0.035f * movementBlend);
 
             ApplyHumanoidBlock();
-            ApplyHumanoidAttack();
+            if (importedAnimationDriver == null) ApplyHumanoidAttack();
 
             pose.bodyPosition.y += idleWave * idleBobAmount * 0.5f * (1f - movementBlend * 0.5f);
             poseHandler.SetHumanPose(ref pose);
@@ -230,6 +243,10 @@ namespace FightingGame.Prototype
         private void TryInitializeHumanoidPose()
         {
             humanoidPoseAvailable = false;
+            if (!useHumanoidProceduralPose)
+            {
+                return;
+            }
             if (animator == null || animator.avatar == null || !animator.avatar.isValid || !animator.avatar.isHuman)
             {
                 return;

@@ -31,6 +31,10 @@ namespace FightingGame.Prototype
         private readonly List<PrototypeInputFrame> pending = new List<PrototypeInputFrame>();
         private PrototypeInputFrame lastCaptured;
         private PrototypeInputFrame held;
+        private bool controllerForwardHeld;
+        private bool controllerBackwardHeld;
+
+        private const float MovementDeadzone = 0.45f;
 
         // Queue changes, not every render sample: retain a tap or neutral transition between ticks.
         public void Capture() { Capture(Sample()); }
@@ -80,6 +84,8 @@ namespace FightingGame.Prototype
             pending.Clear();
             lastCaptured = default(PrototypeInputFrame);
             held = default(PrototypeInputFrame);
+            controllerForwardHeld = false;
+            controllerBackwardHeld = false;
         }
 
         public PrototypeControlProfile ControlProfile { get { return controlProfile; } }
@@ -94,16 +100,23 @@ namespace FightingGame.Prototype
             bool playerOne = controlProfile == PrototypeControlProfile.PlayerOne;
             KeyCode forwardKey = playerOne ? KeyCode.D : KeyCode.L;
             KeyCode backwardKey = playerOne ? KeyCode.A : KeyCode.J;
+            Vector2 controllerMovement = ReadControllerVector(playerOne, "DPad");
+            bool newControllerForwardHeld = controllerMovement.x > MovementDeadzone;
+            bool newControllerBackwardHeld = controllerMovement.x < -MovementDeadzone;
 
             PrototypeInputFrame frame = new PrototypeInputFrame
             {
-                ForwardHeld = Input.GetKey(forwardKey) || (playerOne && Input.GetKey(KeyCode.JoystickButton5)),
-                BackwardHeld = Input.GetKey(backwardKey) || (playerOne && Input.GetKey(KeyCode.JoystickButton4)),
-                ForwardPressed = Input.GetKeyDown(forwardKey) || (playerOne && Input.GetKeyDown(KeyCode.JoystickButton5)),
-                BackwardPressed = Input.GetKeyDown(backwardKey) || (playerOne && Input.GetKeyDown(KeyCode.JoystickButton4)),
-                Side = ReadSideInput(playerOne),
+                ForwardHeld = Input.GetKey(forwardKey) || newControllerForwardHeld,
+                BackwardHeld = Input.GetKey(backwardKey) || newControllerBackwardHeld,
+                ForwardPressed = Input.GetKeyDown(forwardKey) ||
+                    (newControllerForwardHeld && !controllerForwardHeld),
+                BackwardPressed = Input.GetKeyDown(backwardKey) ||
+                    (newControllerBackwardHeld && !controllerBackwardHeld),
+                Side = Mathf.Clamp(ReadSideInput(playerOne) + controllerMovement.y, -1f, 1f),
                 AttackDirection = ReadAttackDirection(playerOne)
             };
+            controllerForwardHeld = newControllerForwardHeld;
+            controllerBackwardHeld = newControllerBackwardHeld;
             return frame;
         }
 
@@ -140,21 +153,28 @@ namespace FightingGame.Prototype
                 return Vector2.ClampMagnitude(direction, 1f);
             }
 
-            if (!playerOne)
-            {
-                return Vector2.zero;
-            }
+            return Vector2.ClampMagnitude(ReadControllerVector(playerOne, "Right Stick"), 1f);
+        }
 
-            // The legacy Horizontal/Vertical axes also include WASD. Suppress that
-            // contribution while movement keys are held so only a gamepad stick attacks.
-            if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.A) ||
-                Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.D))
-            {
-                return Vector2.zero;
-            }
+        private static Vector2 ReadControllerVector(bool playerOne, string control)
+        {
+            string player = playerOne ? "P1" : "P2";
+            string layout = IsPlayStationController(playerOne) ? "PlayStation" : "Standard";
+            return new Vector2(
+                Input.GetAxisRaw(player + " " + control + " Horizontal " + layout),
+                Input.GetAxisRaw(player + " " + control + " Vertical " + layout));
+        }
 
-            return Vector2.ClampMagnitude(
-                new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical")), 1f);
+        private static bool IsPlayStationController(bool playerOne)
+        {
+            string[] names = Input.GetJoystickNames();
+            int index = playerOne ? 0 : 1;
+            if (index >= names.Length || string.IsNullOrEmpty(names[index])) return false;
+
+            string name = names[index].ToLowerInvariant();
+            return name.Contains("playstation") || name.Contains("dualshock") ||
+                name.Contains("dualsense") || name.Contains("wireless controller") ||
+                name.Contains("sony");
         }
     }
 }
