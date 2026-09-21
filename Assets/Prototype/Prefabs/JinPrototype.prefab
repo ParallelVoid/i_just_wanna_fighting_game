@@ -236,6 +236,7 @@ MonoBehaviour:
   backdashDuration: 0.32
   teepStepSpeed: 2.4
   stepFrequency: 2.3
+  postAttackTurnSpeed: 360
 --- !u!114 &1751802941681235565
 MonoBehaviour:
   m_ObjectHideFlags: 0

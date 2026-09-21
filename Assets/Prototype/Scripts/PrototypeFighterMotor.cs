@@ -22,13 +22,17 @@ namespace FightingGame.Prototype
         [SerializeField, Range(0.1f, 0.8f)] private float backdashDuration = 0.32f;
         [SerializeField, Min(0f)] private float teepStepSpeed = 2.4f;
         [SerializeField, Min(0.1f)] private float stepFrequency = 2.3f;
+        [SerializeField, Range(90f, 1080f)] private float postAttackTurnSpeed = 360f;
 
         private Transform opponentTarget;
         private float currentSpeed;
         private float currentSideSpeed;
-        private float lastForwardTapTime = -10f;
-        private float lastBackwardTapTime = -10f;
+        private double lastForwardTapTime = -10f;
+        private double lastBackwardTapTime = -10f;
         private float backdashTimer;
+        private bool attackFacingLocked;
+        private bool turningAfterAttack;
+        private Vector3 lockedAttackForward;
 
         public float MoveInput { get; private set; }
         public float SideInput { get; private set; }
@@ -39,10 +43,14 @@ namespace FightingGame.Prototype
         public bool IsRunning { get; private set; }
         public bool IsBlocking { get; private set; }
         public bool IsBackdashing { get { return backdashTimer > 0f; } }
+        public bool IsAttackFacingLocked { get { return attackFacingLocked; } }
+        public bool IsTurningAfterAttack { get { return turningAfterAttack; } }
 
         public void SetOpponent(Transform target)
         {
             opponentTarget = target;
+            attackFacingLocked = false;
+            turningAfterAttack = false;
             SnapFacingToOpponent();
         }
 
@@ -69,6 +77,7 @@ namespace FightingGame.Prototype
             float teepStepEnvelope,
             bool movementLocked)
         {
+            UpdateAttackFacingLock(movementLocked);
             MoveInput = 0f;
             SideInput = 0f;
             if (!IsBlocking && !IsBackdashing)
@@ -93,10 +102,10 @@ namespace FightingGame.Prototype
 
             if (IsBackdashing)
             {
-                backdashTimer = Mathf.Max(0f, backdashTimer - Time.deltaTime);
+                backdashTimer = Mathf.Max(0f, backdashTimer - CombatClock.StepSeconds);
                 float normalizedBackdash = backdashDuration > 0f ? backdashTimer / backdashDuration : 0f;
                 currentSpeed = -backdashSpeed * Mathf.Sin(normalizedBackdash * Mathf.PI);
-                currentSideSpeed = Mathf.MoveTowards(currentSideSpeed, 0f, acceleration * Time.deltaTime);
+                currentSideSpeed = Mathf.MoveTowards(currentSideSpeed, 0f, acceleration * CombatClock.StepSeconds);
             }
             else if (attack == PrototypeAttack.StepTeep)
             {
@@ -105,20 +114,20 @@ namespace FightingGame.Prototype
             }
             else
             {
-                currentSpeed = Mathf.MoveTowards(currentSpeed, targetSpeed, acceleration * Time.deltaTime);
-                currentSideSpeed = Mathf.MoveTowards(currentSideSpeed, targetSideSpeed, acceleration * Time.deltaTime);
+                currentSpeed = Mathf.MoveTowards(currentSpeed, targetSpeed, acceleration * CombatClock.StepSeconds);
+                currentSideSpeed = Mathf.MoveTowards(currentSideSpeed, targetSideSpeed, acceleration * CombatClock.StepSeconds);
             }
 
             Vector3 position = transform.position;
-            Vector3 fightForward = GetFightForward(position);
+            Vector3 fightForward = attackFacingLocked ? lockedAttackForward : GetFightForward(position);
             Vector3 sidestepDirection = Vector3.Cross(fightForward, Vector3.up).normalized;
-            position += (fightForward * currentSpeed + sidestepDirection * currentSideSpeed) * Time.deltaTime;
+            position += (fightForward * currentSpeed + sidestepDirection * currentSideSpeed) * CombatClock.StepSeconds;
             transform.position = ResolveFighterSeparation(position);
-            SnapFacingToOpponent();
+            UpdateFacingAfterMovement();
 
             if (CurrentPlanarSpeed > 0.03f)
             {
-                StepClock += Time.deltaTime * stepFrequency *
+                StepClock += CombatClock.StepSeconds * stepFrequency *
                              Mathf.Lerp(0.65f, 1f, CurrentPlanarSpeed / moveSpeed);
             }
         }
@@ -132,6 +141,9 @@ namespace FightingGame.Prototype
             IsRunning = false;
             IsBlocking = false;
             backdashTimer = 0f;
+            attackFacingLocked = false;
+            turningAfterAttack = false;
+            lockedAttackForward = Vector3.zero;
         }
 
         public void ResetRuntimeState()
@@ -144,38 +156,96 @@ namespace FightingGame.Prototype
 
         public void SnapFacingToOpponent()
         {
+            if (attackFacingLocked) return;
             if (opponentTarget == null) return;
             Vector3 forward = opponentTarget.position - transform.position;
             forward.y = 0f;
             if (forward.sqrMagnitude > 0.0001f)
             {
                 transform.rotation = Quaternion.LookRotation(forward.normalized, Vector3.up);
+                turningAfterAttack = false;
             }
+        }
+
+        private void UpdateFacingAfterMovement()
+        {
+            if (attackFacingLocked) return;
+            if (!turningAfterAttack)
+            {
+                SnapFacingToOpponent();
+                return;
+            }
+
+            if (opponentTarget == null)
+            {
+                turningAfterAttack = false;
+                return;
+            }
+
+            Vector3 forward = opponentTarget.position - transform.position;
+            forward.y = 0f;
+            if (forward.sqrMagnitude <= 0.0001f)
+            {
+                turningAfterAttack = false;
+                return;
+            }
+
+            Quaternion targetRotation = Quaternion.LookRotation(forward.normalized, Vector3.up);
+            transform.rotation = Quaternion.RotateTowards(
+                transform.rotation,
+                targetRotation,
+                postAttackTurnSpeed * CombatClock.StepSeconds);
+            if (Quaternion.Angle(transform.rotation, targetRotation) <= 0.1f)
+            {
+                transform.rotation = targetRotation;
+                turningAfterAttack = false;
+            }
+        }
+
+        private void UpdateAttackFacingLock(bool shouldLock)
+        {
+            if (!shouldLock)
+            {
+                if (attackFacingLocked) turningAfterAttack = true;
+                attackFacingLocked = false;
+                lockedAttackForward = Vector3.zero;
+                return;
+            }
+
+            if (attackFacingLocked) return;
+            turningAfterAttack = false;
+            lockedAttackForward = transform.forward;
+            lockedAttackForward.y = 0f;
+            if (lockedAttackForward.sqrMagnitude <= 0.0001f)
+                lockedAttackForward = GetFightForward(transform.position);
+            else
+                lockedAttackForward.Normalize();
+            attackFacingLocked = true;
         }
 
         private void UpdateMovementGestures(PrototypeInputFrame input, bool isAttacking)
         {
             if (input.ForwardPressed && !input.BackwardHeld)
             {
-                if (Time.time - lastForwardTapTime <= doubleTapWindow)
+                if (CombatClock.TimeSeconds - lastForwardTapTime <= doubleTapWindow)
                 {
                     IsRunning = true;
                     lastForwardTapTime = -10f;
                 }
-                else lastForwardTapTime = Time.time;
+                else lastForwardTapTime = CombatClock.TimeSeconds;
             }
             if (!input.ForwardHeld) IsRunning = false;
 
             if (input.BackwardPressed && !input.ForwardHeld && !isAttacking)
             {
-                if (Time.time - lastBackwardTapTime <= doubleTapWindow)
+                if (CombatClock.TimeSeconds - lastBackwardTapTime <= doubleTapWindow)
                 {
                     backdashTimer = backdashDuration;
                     lastBackwardTapTime = -10f;
                     IsRunning = false;
                     currentSideSpeed = 0f;
                 }
-                else lastBackwardTapTime = Time.time;
+                else lastBackwardTapTime = CombatClock.TimeSeconds;
             }
         }
 

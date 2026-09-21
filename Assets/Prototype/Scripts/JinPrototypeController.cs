@@ -42,6 +42,7 @@ namespace FightingGame.Prototype
         private PrototypeFighterMotor fighterMotor;
         private bool controlsEnabled = true;
         private PrototypeDummyOpponent selfReaction;
+        private PrototypeInputFrame tickInput;
 
         public float MoveInput { get { return fighterMotor != null ? fighterMotor.MoveInput : 0f; } }
         public float SideInput { get { return fighterMotor != null ? fighterMotor.SideInput : 0f; } }
@@ -94,6 +95,7 @@ namespace FightingGame.Prototype
             EnsureModules();
             fighterMotor.ResetRuntimeState();
             fighterCombat.ResetRuntimeState();
+            fighterInput.ClearPendingInput();
         }
 
         private void Awake()
@@ -130,32 +132,52 @@ namespace FightingGame.Prototype
 
         private void OnEnable()
         {
+            CombatClock.Register(this);
             if (poseHandler == null)
             {
                 TryInitializeHumanoidPose();
             }
         }
 
-        private void Update()
+        private void OnDisable() { CombatClock.Unregister(this); }
+
+        public void CaptureInput()
+        {
+            if (controlsEnabled) fighterInput.Capture();
+            else fighterInput.ClearPendingInput();
+        }
+
+        public void PrepareCombatTick()
         {
             if (!controlsEnabled)
             {
+                fighterInput.ClearPendingInput();
                 if (!playerControlled && (selfReaction == null || !selfReaction.IsReacting))
-                {
                     fighterMotor.SnapFacingToOpponent();
-                }
                 return;
             }
-
-            PrototypeInputFrame input = fighterInput.Sample();
-            fighterMotor.PrepareFrame(input, fighterCombat.IsAttacking);
-            fighterCombat.Tick(input.ForwardHeld, input.AttackDirection,
+            tickInput = fighterInput.ConsumeTick();
+            fighterMotor.PrepareFrame(tickInput, fighterCombat.IsAttacking);
+            fighterCombat.Tick(tickInput.ForwardHeld, tickInput.AttackDirection,
                 !fighterMotor.IsBlocking && !fighterMotor.IsBackdashing,
-                fighterMotor.GetCurrentFighterState(input));
-            fighterMotor.Simulate(input, fighterCombat.CurrentAttack,
-                fighterCombat.TeepStepEnvelope, fighterCombat.OccupiedThisFrame);
+                fighterMotor.GetCurrentFighterState(tickInput));
+        }
 
-            fighterCombat.ResolveHitbox();
+        public void MoveCombatTick()
+        {
+            if (!controlsEnabled) return;
+            fighterMotor.Simulate(tickInput, fighterCombat.CurrentAttack,
+                fighterCombat.TeepStepEnvelope, fighterCombat.OccupiedThisFrame);
+        }
+
+        public void ResolveCombatTick()
+        {
+            if (controlsEnabled) fighterCombat.ResolveHitbox();
+        }
+
+        public void FinishCombatTick()
+        {
+            if (controlsEnabled) fighterCombat.AdvanceMoveFrame();
         }
 
         private void LateUpdate()

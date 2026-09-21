@@ -58,7 +58,7 @@ namespace FightingGame.Prototype
             remainingSeconds = Mathf.Max(1f, countdownSeconds);
         }
 
-        private void Update()
+        public void SimulateCountdown()
         {
             if (countdown != previousCountdownState)
             {
@@ -71,7 +71,7 @@ namespace FightingGame.Prototype
 
             if (countdown && remainingSeconds > 0f)
             {
-                remainingSeconds = Mathf.Max(0f, remainingSeconds - Time.deltaTime);
+                remainingSeconds = Mathf.Max(0f, remainingSeconds - CombatClock.StepSeconds);
             }
         }
 
