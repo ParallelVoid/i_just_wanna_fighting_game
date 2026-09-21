@@ -26,7 +26,7 @@ namespace FightingGame.Prototype
         private Texture2D pixel;
         private GUIStyle titleStyle;
         private GUIStyle valueStyle;
-        private float lastDamageTime = -100f;
+        private double lastDamageTime = -100f;
         private float wavePhase;
         private float currentPulseSpeed;
 
@@ -46,7 +46,7 @@ namespace FightingGame.Prototype
             float multiplier = 1f + vulnerability * damageGrowthAtDanger;
             LastDamageApplied = Mathf.Max(0f, baseAmount) * multiplier;
             accumulatedDamage = Mathf.Max(0f, accumulatedDamage + LastDamageApplied);
-            lastDamageTime = Time.time;
+            lastDamageTime = CombatClock.TimeSeconds;
             return strongAttack && accumulatedDamage >= dangerThreshold;
         }
 
@@ -74,7 +74,11 @@ namespace FightingGame.Prototype
                 wavePhase + currentPulseSpeed * Mathf.PI * 2f * Time.deltaTime,
                 Mathf.PI * 2f);
 
-            if (accumulatedDamage <= 0f || Time.time - lastDamageTime < recoveryDelay)
+        }
+
+        public void SimulateTick()
+        {
+            if (accumulatedDamage <= 0f || CombatClock.TimeSeconds - lastDamageTime < recoveryDelay)
             {
                 return;
             }
@@ -82,7 +86,7 @@ namespace FightingGame.Prototype
             accumulatedDamage = Mathf.MoveTowards(
                 accumulatedDamage,
                 0f,
-                recoveryPerSecond * Time.deltaTime);
+                recoveryPerSecond * CombatClock.StepSeconds);
         }
 
         private void OnGUI()
