@@ -15,26 +15,16 @@ A fighting game inspired by *Buriki One*, *Mortal Kombat X*, and *World Heroes*.
 | Move backward | <kbd>A</kbd> | <kbd>LB</kbd> |
 | Move forward | <kbd>D</kbd> | <kbd>RB</kbd> |
 | Run forward | Double-tap and hold <kbd>D</kbd> | Double-tap and hold <kbd>RB</kbd> |
-| Backdash | Double-tap <kbd>A</kbd> | Double-tap <kbd>LB</kbd> |
-| Block | Hold <kbd>A</kbd> + <kbd>D</kbd> | Hold <kbd>RB</kbd> + <kbd>RB</kbd> |
-| Sidestep around opponent | <kbd>W</kbd> / <kbd>S</kbd> | Not assigned yet |
-| Straight punch | Right Arrow | Attack stick right |
-| High kick | Up Arrow | Attack stick up |
-| Low kick | Down Arrow | Attack stick down |
-| Stepping teep/push kick | Hold <kbd>D</kbd>, Back → Neutral → Forward arrows | Hold <kbd>RB</kbd>, attack stick Back → Neutral → Forward |
+| Sidestep | <kbd>W</kbd> / <kbd>S</kbd> | Not assigned yet |
 
 ### Two-player Control Scheme
 Both fighters have prototype movement and attack set:
 | Action | Player 1 | Player 2 |
 |---|---|---|
-| Back / Forward | <kbd>A</kbd> / <kbd>D</kbd> | <kbd>J</kbd> / <kbd>L</kbd> |
+| Move backward | <kbd>A</kbd> | <kbd>J</kbd> |
+| Move forward | <kbd>D</kbd> | <kbd>L</kbd> |
+| Run forward | Double-tap and hold <kbd>D</kbd> | Double-tap and hold <kbd>J</kbd> |
 | Sidestep | <kbd>W</kbd> / <kbd>S</kbd> | <kbd>I</kbd> / <kbd>K</kbd> |
-| Attack Back / Forward | Left / Right Arrow | <kbd>F</kbd> / <kbd>H</kbd> |
-| High / Low attack | Up / Down Arrow | <kbd>T</kbd> / <kbd>G</kbd> |
-| Block | <kbd>A</kbd> + <kbd>D</kbd> | <kbd>J</kbd> + <kbd>L</kbd> |
-| Run | <kbd>D</kbd> <kbd>D</kbd> | <kbd>L</kbd> <kbd>L</kbd> |
-| Backdash | <kbd>A</kbd> <kbd>A</kbd> | <kbd>J</kbd> <kbd>J</kbd> |
-| Stepping teep | Hold <kbd>D</kbd>, Left → Neutral → Right | Hold <kbd>L</kbd>, <kbd>F</kbd> → Neutral → <kbd>H</kbd> |
 
 ### Prototype Hitboxes Information
 - Red translucent box: The attack is currently active and has not connected.
@@ -45,10 +35,10 @@ Both fighters have prototype movement and attack set:
 - [ ] Separate movement input from attack-direction input.
 - [ ] Input priority and simultaneous-input behavior.
 - [ ] Configurable keyboard and gamepad bindings.
-- [ ] Gamepad sidestep mapping.
+- [x] Gamepad sidestep mapping.
 
 ### 60 Hz combat clock
-- [ ] Advance both fighters through one clock with fixed tick durations.
+- [x] Advance both fighters through one clock with fixed tick durations.
 - [ ] Check hitboxes on every tick, including catch-up ticks.
 - [ ] Shared time for movement gestures, teep commands, existing reactions, damage recovery, countdown, and resets.
 - [ ] Preserve sampled input transitions between ticks without repeating button edges.
