@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.Animations;
 using UnityEngine.Playables;
+using Combat;
 
 namespace FightingGame.Prototype
 {
@@ -19,10 +20,8 @@ namespace FightingGame.Prototype
 
         [SerializeField] private Animator animator;
         [SerializeField] private PrototypeFighterCombat fighterCombat;
-        [SerializeField] private AnimationClip middleSideKick;
-        [SerializeField] private AnimationClip crescentKick;
-        [SerializeField] private AnimationClip lowSideKick;
-        [SerializeField] private AnimationClip axeKick;
+        [SerializeField] private PrototypeFighterMotor fighterMotor;
+        [SerializeField] private AnimationClip idleClip;
         private PlayableGraph graph;
         private AnimationClipPlayable clipPlayable;
         private AnimationClip activeClip;
@@ -31,31 +30,31 @@ namespace FightingGame.Prototype
         {
             get
             {
-                return fighterCombat != null && fighterCombat.IsAttacking &&
-                       GetClip(fighterCombat.CurrentAttack) != null;
+                bool drivesAttack = fighterCombat != null && fighterCombat.IsAttacking &&
+                                    GetClip(fighterCombat.CurrentMove) != null;
+                bool drivesIdle = idleClip != null && fighterCombat != null && !fighterCombat.IsAttacking &&
+                                  fighterMotor != null && !fighterMotor.IsMoving &&
+                                  !fighterMotor.IsBlocking && !fighterMotor.IsBackdashing;
+                return drivesAttack || drivesIdle;
             }
         }
 
         public void Configure(
             Animator targetAnimator,
             PrototypeFighterCombat combat,
-            AnimationClip middle,
-            AnimationClip crescent,
-            AnimationClip low,
-            AnimationClip axe)
+            AnimationClip idleAnimation)
         {
             animator = targetAnimator;
             fighterCombat = combat;
-            middleSideKick = middle;
-            crescentKick = crescent;
-            lowSideKick = low;
-            axeKick = axe;
+            fighterMotor = GetComponent<PrototypeFighterMotor>();
+            idleClip = idleAnimation;
         }
 
         private void Awake()
         {
             if (animator == null) animator = GetComponentInChildren<Animator>();
             if (fighterCombat == null) fighterCombat = GetComponent<PrototypeFighterCombat>();
+            if (fighterMotor == null) fighterMotor = GetComponent<PrototypeFighterMotor>();
             if (animator != null)
             {
                 animator.applyRootMotion = false;
@@ -71,7 +70,7 @@ namespace FightingGame.Prototype
                 return;
             }
 
-            AnimationClip clip = GetClip(fighterCombat.CurrentAttack);
+            AnimationClip clip = GetClip(fighterCombat.CurrentMove);
             if (clip != activeClip)
             {
                 StartClip(clip);
@@ -119,16 +118,9 @@ namespace FightingGame.Prototype
         private void OnDisable() { StopClip(); }
         private void OnDestroy() { StopClip(); }
 
-        private AnimationClip GetClip(PrototypeAttack attack)
+        private AnimationClip GetClip(MoveDefinition move)
         {
-            switch (attack)
-            {
-                case PrototypeAttack.StraightPunch: return middleSideKick;
-                case PrototypeAttack.HighKick: return crescentKick;
-                case PrototypeAttack.LowKick: return lowSideKick;
-                case PrototypeAttack.StepTeep: return axeKick;
-                default: return null;
-            }
+            return move != null ? move.animationClip : null;
         }
 
     }

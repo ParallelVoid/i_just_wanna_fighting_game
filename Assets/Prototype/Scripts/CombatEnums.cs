@@ -25,6 +25,27 @@ namespace Combat
         Box
     }
 
+    /// <summary>Rig-independent attachment point resolved by the fighter's FighterRig.</summary>
+    public enum HitboxAnchor
+    {
+        FighterRoot,
+        Hips,
+        Chest,
+        Head,
+        LeftHand,
+        RightHand,
+        LeftFoot,
+        RightFoot,
+        Custom
+    }
+
+    public enum MoveKind
+    {
+        Strike,
+        Throw,
+        SubmissionEntry
+    }
+
     /// <summary>
     /// What kind of knockdown a landed hit causes, if any.
     /// </summary>

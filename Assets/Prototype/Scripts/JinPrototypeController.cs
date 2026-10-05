@@ -31,7 +31,7 @@ namespace FightingGame.Prototype
         private HumanPose pose;
         private float[] baseMuscles;
         private Vector3 baseBodyPosition;
-        private Quaternion baseBodyRotation;
+        private Quaternion bodyRotationRelativeToRoot;
         private readonly Dictionary<string, int> muscleIndices = new Dictionary<string, int>();
         private readonly Dictionary<string, Transform> fallbackBones = new Dictionary<string, Transform>();
         private readonly Dictionary<string, Quaternion> fallbackRotations = new Dictionary<string, Quaternion>();
@@ -174,8 +174,8 @@ namespace FightingGame.Prototype
         public void MoveCombatTick()
         {
             if (!controlsEnabled) return;
-            fighterMotor.Simulate(tickInput, fighterCombat.CurrentAttack,
-                fighterCombat.TeepStepEnvelope, fighterCombat.OccupiedThisFrame);
+            fighterMotor.Simulate(tickInput, fighterCombat.CurrentForwardMovementSpeed,
+                fighterCombat.OccupiedThisFrame);
         }
 
         public void ResolveCombatTick()
@@ -206,7 +206,10 @@ namespace FightingGame.Prototype
             poseHandler.GetHumanPose(ref pose);
             Array.Copy(baseMuscles, pose.muscles, baseMuscles.Length);
             pose.bodyPosition = baseBodyPosition;
-            pose.bodyRotation = baseBodyRotation;
+            // SetHumanPose expects body rotation relative to the handler root.
+            // Supplying a world rotation here applies the gameplay root rotation a
+            // second time, making Player 2's idle face the camera instead of Player 1.
+            pose.bodyRotation = bodyRotationRelativeToRoot;
 
             float movementBlend = Mathf.Clamp01(CurrentPlanarSpeed / fighterMotor.MoveSpeed);
             float idleWave = Mathf.Sin(Time.time * idleBreathSpeed * 0.55f * Mathf.PI * 2f) * idleMotionScale;
@@ -262,7 +265,10 @@ namespace FightingGame.Prototype
             poseHandler.GetHumanPose(ref pose);
             baseMuscles = (float[])pose.muscles.Clone();
             baseBodyPosition = pose.bodyPosition;
-            baseBodyRotation = pose.bodyRotation;
+            // GetHumanPose returns the body rotation in world space, while
+            // SetHumanPose consumes it relative to the handler root.
+            bodyRotationRelativeToRoot = Quaternion.Inverse(animator.transform.rotation) *
+                                         pose.bodyRotation;
 
             muscleIndices.Clear();
             for (int i = 0; i < HumanTrait.MuscleName.Length; i++)
@@ -426,28 +432,29 @@ namespace FightingGame.Prototype
                 return;
             }
 
-            switch (fighterCombat.CurrentAttack)
+            string moveId = fighterCombat.CurrentMove != null ? fighterCombat.CurrentMove.moveId : string.Empty;
+            switch (moveId)
             {
-                case PrototypeAttack.StraightPunch:
+                case "straight_punch":
                     AddMuscle("Right Arm Down-Up", 0.66f * amount);
                     AddMuscle("Right Arm Front-Back", -0.78f * amount);
                     AddMuscle("Right Forearm Stretch", 0.92f * amount);
                     AddMuscle("Spine Twist Left-Right", -0.16f * amount);
                     break;
 
-                case PrototypeAttack.HighKick:
+                case "high_kick":
                     AddMuscle("Right Upper Leg Front-Back", -0.92f * amount);
                     AddMuscle("Right Lower Leg Stretch", 0.22f * amount);
                     AddMuscle("Spine Front-Back", 0.12f * amount);
                     break;
 
-                case PrototypeAttack.LowKick:
+                case "low_kick":
                     AddMuscle("Right Upper Leg Front-Back", -0.5f * amount);
                     AddMuscle("Right Lower Leg Stretch", 0.34f * amount);
                     AddMuscle("Spine Front-Back", -0.06f * amount);
                     break;
 
-                case PrototypeAttack.StepTeep:
+                case "step_teep":
                     AddMuscle("Right Upper Leg Front-Back", -0.72f * amount);
                     AddMuscle("Right Lower Leg Stretch", 0.82f * amount);
                     AddMuscle("Right Foot Up-Down", 0.18f * amount);
@@ -472,9 +479,10 @@ namespace FightingGame.Prototype
             Vector3 target;
             Vector3 pole;
 
-            switch (fighterCombat.CurrentAttack)
+            string moveId = fighterCombat.CurrentMove != null ? fighterCombat.CurrentMove.moveId : string.Empty;
+            switch (moveId)
             {
-                case PrototypeAttack.StraightPunch:
+                case "straight_punch":
                     if (TryGetFallbackChain("arm right shoulder 2", "arm right elbow", "arm right wrist", out root, out mid, out end))
                     {
                         target = root.position + transform.forward * 0.64f + Vector3.down * 0.06f;
@@ -484,7 +492,7 @@ namespace FightingGame.Prototype
                     }
                     break;
 
-                case PrototypeAttack.HighKick:
+                case "high_kick":
                     if (TryGetFallbackChain("leg right thigh", "leg right knee", "leg right ankle", out root, out mid, out end))
                     {
                         target = root.position + transform.forward * 0.72f + Vector3.up * 0.42f;
@@ -494,7 +502,7 @@ namespace FightingGame.Prototype
                     }
                     break;
 
-                case PrototypeAttack.LowKick:
+                case "low_kick":
                     if (TryGetFallbackChain("leg right thigh", "leg right knee", "leg right ankle", out root, out mid, out end))
                     {
                         target = root.position + transform.forward * 0.68f + Vector3.down * 0.42f;
@@ -504,7 +512,7 @@ namespace FightingGame.Prototype
                     }
                     break;
 
-                case PrototypeAttack.StepTeep:
+                case "step_teep":
                     if (TryGetFallbackChain("leg right thigh", "leg right knee", "leg right ankle", out root, out mid, out end))
                     {
                         target = root.position + transform.forward * 0.82f + Vector3.up * 0.05f;
@@ -612,7 +620,7 @@ namespace FightingGame.Prototype
             {
                 string moveName = fighterCombat.CurrentMove != null
                     ? fighterCombat.CurrentMove.displayName
-                    : fighterCombat.CurrentAttack.ToString();
+                    : "Unknown";
                 string result = fighterCombat.LastHitWasBlocked
                     ? "  BLOCKED"
                     : fighterCombat.AttackConnected ? "  HIT" : string.Empty;

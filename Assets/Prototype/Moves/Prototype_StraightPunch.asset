@@ -15,7 +15,17 @@ MonoBehaviour:
   moveId: straight_punch
   displayName: Straight Punch
   inputCommand: AttackRight
+  command:
+    steps:
+    - token: 1
+      maxDelayFrames: 25
+    priority: 0
+    requireForwardHeld: 0
   requiredFighterStates: 00000000010000000200000003000000i
+  moveKind: 0
+  movementStartFrame: 0
+  movementEndFrame: 0
+  forwardMovementSpeed: 0
   startupFrames: 5
   activeFrames: 8
   recoveryFrames: 12
@@ -41,6 +51,8 @@ MonoBehaviour:
   - label: straight_punch
     shape: 2
     size: {x: 0.1, y: 0.16, z: 0.28}
+    anchor: 0
+    customAnchorName: ''
     attachedBoneName: 
     localPosition: {x: 0, y: 1.25, z: 0.72}
     localEulerRotation: {x: 0, y: 0, z: 0}
@@ -50,6 +62,7 @@ MonoBehaviour:
     hitPriority: 0
     damageOverride: -1
     hitstunOverride: -1
+  animationClip: {fileID: 0}
   animationStateName: StraightPunch
   soundEvents: []
   effectEvents: []

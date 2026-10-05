@@ -15,7 +15,17 @@ MonoBehaviour:
   moveId: low_kick
   displayName: Low Kick
   inputCommand: AttackDown
+  command:
+    steps:
+    - token: 4
+      maxDelayFrames: 25
+    priority: 0
+    requireForwardHeld: 0
   requiredFighterStates: 00000000010000000200000003000000i
+  moveKind: 0
+  movementStartFrame: 0
+  movementEndFrame: 0
+  forwardMovementSpeed: 0
   startupFrames: 7
   activeFrames: 10
   recoveryFrames: 13
@@ -41,6 +51,8 @@ MonoBehaviour:
   - label: low_kick
     shape: 2
     size: {x: 0.16, y: 0.15, z: 0.32}
+    anchor: 0
+    customAnchorName: ''
     attachedBoneName: 
     localPosition: {x: 0, y: 0.46, z: 0.68}
     localEulerRotation: {x: 0, y: 0, z: 0}
@@ -50,6 +62,7 @@ MonoBehaviour:
     hitPriority: 0
     damageOverride: -1
     hitstunOverride: -1
+  animationClip: {fileID: 0}
   animationStateName: LowKick
   soundEvents: []
   effectEvents: []

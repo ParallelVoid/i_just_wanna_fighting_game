@@ -176,6 +176,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: d43e3f77e4990401fa092ae039746fe5, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1751802941681235565}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: d43e3f77e4990401fa092ae039746fe5, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 8000000000000000002}
   m_SourcePrefab: {fileID: 100100000, guid: d43e3f77e4990401fa092ae039746fe5, type: 3}
 --- !u!1 &6706245002881332427 stripped
 GameObject:
@@ -195,6 +198,27 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FightingGame.Prototype.PrototypeFighterInput
   controlProfile: 0
+--- !u!114 &8000000000000000002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6706245002881332427}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d1816705db38498d95e2fef406c68303, type: 3}
+  m_Name: ''
+  m_EditorClassIdentifier: Assembly-CSharp::FightingGame.Prototype.FighterRig
+  customBindings:
+  - anchor: 4
+    transformName: arm left wrist
+  - anchor: 5
+    transformName: arm right wrist
+  - anchor: 6
+    transformName: leg left toe
+  - anchor: 7
+    transformName: leg right toe
 --- !u!114 &6104449386068077719
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -207,6 +231,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 61220987e76847f7a3d5bc3c5f4f0a9d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FightingGame.Prototype.PrototypeFighterCombat
+  movePack: {fileID: 11400000, guid: 75fc7687e16a4415b838e23bdf166004, type: 2}
   straightPunch: {fileID: 11400000, guid: 4556d758db98a42ac8976611238d711e, type: 2}
   highKick: {fileID: 11400000, guid: 63e6dd4a7c3564cbebf1d5df705019e3, type: 2}
   lowKick: {fileID: 11400000, guid: 9bef22211f81c456abda773ef32fab74, type: 2}
@@ -234,7 +259,6 @@ MonoBehaviour:
   runSpeedMultiplier: 1.65
   backdashSpeed: 5.4
   backdashDuration: 0.32
-  teepStepSpeed: 2.4
   stepFrequency: 2.3
   postAttackTurnSpeed: 360
 --- !u!114 &1751802941681235565

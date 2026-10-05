@@ -27,6 +27,13 @@ namespace Combat
         public Vector3 size = new Vector3(0.3f, 0.3f, 0.3f);
 
         [Header("Attachment")]
+        [Tooltip("Semantic attachment resolved separately for each fighter rig.")]
+        public HitboxAnchor anchor = HitboxAnchor.FighterRoot;
+
+        [Tooltip("Used only when Anchor is Custom.")]
+        public string customAnchorName = "";
+
+        [HideInInspector]
         [Tooltip("Bone this hitbox follows. Leave empty to use fighter-root space instead.")]
         public string attachedBoneName = "";
 

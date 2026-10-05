@@ -10,14 +10,14 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c95f8756e37e44589bed4878e586f311, type: 3}
-  m_Name: Prototype_HighKick
-  m_EditorClassIdentifier: 
-  moveId: high_kick
-  displayName: High Kick
-  inputCommand: AttackUp
+  m_Name: JinKorean_LowSideKick
+  m_EditorClassIdentifier: ''
+  moveId: jin_korean_low_side_kick
+  displayName: Low Side Kick
+  inputCommand: AttackDown
   command:
     steps:
-    - token: 3
+    - token: 4
       maxDelayFrames: 25
     priority: 0
     requireForwardHeld: 0
@@ -26,14 +26,14 @@ MonoBehaviour:
   movementStartFrame: 0
   movementEndFrame: 0
   forwardMovementSpeed: 0
-  startupFrames: 10
-  activeFrames: 12
-  recoveryFrames: 15
-  damage: 16
+  startupFrames: 7
+  activeFrames: 10
+  recoveryFrames: 13
+  damage: 11
   chipDamage: 0
   hitstunFrames: 14
   blockstunFrames: 10
-  defaultHitLevel: 0
+  defaultHitLevel: 2
   counterHitBonusStunFrames: 6
   counterHitKnockdown: 0
   pushbackOnHit: 0.25
@@ -48,22 +48,22 @@ MonoBehaviour:
   meterGainOnHit: 6
   meterGainOnBlock: 3
   hitboxes:
-  - label: high_kick
+  - label: foot
     shape: 2
-    size: {x: 0.13, y: 0.23, z: 0.31}
-    anchor: 0
+    size: {x: 0.16, y: 0.15, z: 0.32}
+    anchor: 7
     customAnchorName: ''
-    attachedBoneName: 
-    localPosition: {x: 0, y: 1.38, z: 0.76}
+    attachedBoneName: ''
+    localPosition: {x: 0, y: 0, z: 0}
     localEulerRotation: {x: 0, y: 0, z: 0}
-    startFrame: 10
-    endFrame: 21
-    hitLevel: 0
+    startFrame: 7
+    endFrame: 16
+    hitLevel: 2
     hitPriority: 0
     damageOverride: -1
     hitstunOverride: -1
-  animationClip: {fileID: 0}
-  animationStateName: HighKick
+  animationClip: {fileID: 6223497265622564894, guid: e01f0b2af931c47a38ca7357dcba6154, type: 3}
+  animationStateName: LowSideKick
   soundEvents: []
   effectEvents: []
-  requiredVariationId: 
+  requiredVariationId: ''
