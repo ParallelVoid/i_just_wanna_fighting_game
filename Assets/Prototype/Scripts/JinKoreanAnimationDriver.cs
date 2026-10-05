@@ -22,9 +22,13 @@ namespace FightingGame.Prototype
         [SerializeField] private PrototypeFighterCombat fighterCombat;
         [SerializeField] private PrototypeFighterMotor fighterMotor;
         [SerializeField] private AnimationClip idleClip;
+        [SerializeField, Range(0f, 90f)] private float attackCameraAwayAngle = 30f;
         private PlayableGraph graph;
         private AnimationClipPlayable clipPlayable;
         private AnimationClip activeClip;
+        private HumanPoseHandler attackPoseHandler;
+        private HumanPose attackPose;
+        private Camera fightCamera;
 
         public bool ShouldDrivePose
         {
@@ -87,6 +91,7 @@ namespace FightingGame.Prototype
             Vector3 fighterScale = transform.localScale;
             clipPlayable.SetTime(clip.length * normalizedTime);
             graph.Evaluate(0f);
+            ApplyCameraAwayAngle();
 
             // Imported root curves are presentation data only. The fighter motor owns
             // movement and facing, and the camera follows this stable gameplay root.
@@ -109,14 +114,86 @@ namespace FightingGame.Prototype
             activeClip = clip;
         }
 
+        private void ApplyCameraAwayAngle()
+        {
+            if (attackCameraAwayAngle <= 0f || animator.avatar == null ||
+                !animator.avatar.isValid || !animator.avatar.isHuman)
+            {
+                return;
+            }
+
+            if (fightCamera == null) fightCamera = Camera.main;
+            if (fightCamera == null) return;
+
+            Vector3 awayFromCamera = animator.transform.position - fightCamera.transform.position;
+            awayFromCamera.y = 0f;
+            Vector3 forward = transform.forward;
+            forward.y = 0f;
+            if (awayFromCamera.sqrMagnitude < 0.0001f || forward.sqrMagnitude < 0.0001f) return;
+
+            awayFromCamera.Normalize();
+            forward.Normalize();
+            Vector3 positive = Quaternion.AngleAxis(attackCameraAwayAngle, Vector3.up) * forward;
+            Vector3 negative = Quaternion.AngleAxis(-attackCameraAwayAngle, Vector3.up) * forward;
+            float signedAngle = Vector3.Dot(positive, awayFromCamera) >= Vector3.Dot(negative, awayFromCamera)
+                ? attackCameraAwayAngle
+                : -attackCameraAwayAngle;
+
+            if (attackPoseHandler == null)
+            {
+                attackPoseHandler = new HumanPoseHandler(animator.avatar, animator.transform);
+                attackPose = new HumanPose();
+            }
+
+            Transform hips = animator.GetBoneTransform(HumanBodyBones.Hips);
+            Vector3 anchoredHipsPosition = hips != null ? hips.position : Vector3.zero;
+            attackPoseHandler.GetHumanPose(ref attackPose);
+            Quaternion relativeBodyRotation = Quaternion.Inverse(animator.transform.rotation) *
+                                              attackPose.bodyRotation;
+            attackPose.bodyRotation = Quaternion.AngleAxis(signedAngle, Vector3.up) *
+                                      relativeBodyRotation;
+            attackPoseHandler.SetHumanPose(ref attackPose);
+
+            // Rotating a Humanoid body can orbit an authored, translated pose around
+            // the avatar origin. Offset the body position so the visible fighter stays
+            // anchored where the unrotated attack clip placed its hips.
+            if (hips != null)
+            {
+                Vector3 hipsCorrection = anchoredHipsPosition - hips.position;
+                if (hipsCorrection.sqrMagnitude > 0.0000001f)
+                {
+                    float humanScale = Mathf.Max(0.0001f, animator.humanScale);
+                    attackPose.bodyPosition += animator.transform.InverseTransformVector(hipsCorrection) /
+                                               humanScale;
+                    attackPoseHandler.SetHumanPose(ref attackPose);
+                }
+            }
+        }
+
         private void StopClip()
         {
             if (graph.IsValid()) graph.Destroy();
             activeClip = null;
         }
 
-        private void OnDisable() { StopClip(); }
-        private void OnDestroy() { StopClip(); }
+        private void OnDisable()
+        {
+            StopClip();
+            DisposePoseHandler();
+        }
+
+        private void OnDestroy()
+        {
+            StopClip();
+            DisposePoseHandler();
+        }
+
+        private void DisposePoseHandler()
+        {
+            if (attackPoseHandler == null) return;
+            attackPoseHandler.Dispose();
+            attackPoseHandler = null;
+        }
 
         private AnimationClip GetClip(MoveDefinition move)
         {

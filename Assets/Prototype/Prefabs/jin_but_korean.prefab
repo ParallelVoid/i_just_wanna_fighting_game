@@ -305,3 +305,4 @@ MonoBehaviour:
   fighterCombat: {fileID: 6104449386068077719}
   fighterMotor: {fileID: 3575967269711223311}
   idleClip: {fileID: -5252816984213320552, guid: 169e912f27de64d57a2baef6b4dd72fe, type: 3}
+  attackCameraAwayAngle: 30

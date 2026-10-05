@@ -37,7 +37,7 @@ namespace FightingGame.EditorTools
         private const string JinKoreanMovePackPath = MovesFolder + "/JinKorean/JinKorean_MovePack.asset";
         private const string AutoSetupSessionKey = "FightingGame.JinPrototypeSetup.v24";
         private const string HumanBaseMigrationSessionKey =
-            "FightingGame.JinPrototypeSetup.HumanBaseKorean.v3";
+            "FightingGame.JinPrototypeSetup.HumanBaseKorean.v4";
 
         private sealed class PrototypeMoveSet
         {
