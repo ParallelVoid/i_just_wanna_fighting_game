@@ -1,6 +1,7 @@
 using FightingGame.Prototype;
 using Combat;
 using UnityEditor;
+using UnityEditor.Animations;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -22,9 +23,21 @@ namespace FightingGame.EditorTools
         private const string ScenePath = "Assets/Scenes/SampleScene.unity";
         private const string TwoPlayerScenePath = "Assets/Scenes/TwoPlayerSampleScene.unity";
         private const string PrefabPath = "Assets/Prototype/Prefabs/JinPrototype.prefab";
+        private const string JinKoreanPrefabPath = "Assets/Prototype/Prefabs/jin_but_korean.prefab";
+        private const string JinKoreanModelPath = "Assets/Prototype/Characters/human_base.fbx";
+        private const string JinKoreanControllerPath = "Assets/Prototype/Animations/jin_but_korean.controller";
+        private const string JinKoreanIdlePath = "Assets/Animations/idle.fbx";
+        private const string MiddleSideKickPath = "Assets/Animations/middlesidekicktrimmed_3ckKXwUzEUFtyFmE63gzFM.fbx";
+        private const string CrescentKickPath = "Assets/Animations/crescentkicktrimmed_3ckKXwUzEUFtyFmE63gzFM.fbx";
+        private const string LowSideKickPath = "Assets/Animations/lowsidekicktrimmed_3ckKXwUzEUFtyFmE63gzFM.fbx";
+        private const string AxeKickPath = "Assets/Animations/axekicktrimmed_3ckKXwUzEUFtyFmE63gzFM.fbx";
         private const string OctagonMeshPath = "Assets/Prototype/Materials/Prototype_Octagon.asset";
         private const string MovesFolder = "Assets/Prototype/Moves";
-        private const string AutoSetupSessionKey = "FightingGame.JinPrototypeSetup.v19";
+        private const string PrototypeMovePackPath = MovesFolder + "/Prototype_MovePack.asset";
+        private const string JinKoreanMovePackPath = MovesFolder + "/JinKorean/JinKorean_MovePack.asset";
+        private const string AutoSetupSessionKey = "FightingGame.JinPrototypeSetup.v24";
+        private const string HumanBaseMigrationSessionKey =
+            "FightingGame.JinPrototypeSetup.HumanBaseKorean.v4";
 
         private sealed class PrototypeMoveSet
         {
@@ -32,11 +45,33 @@ namespace FightingGame.EditorTools
             public MoveDefinition HighKick;
             public MoveDefinition LowKick;
             public MoveDefinition Teep;
+            public MovePack PrototypePack;
+            public MovePack KoreanPack;
         }
 
         static JinPrototypeSetup()
         {
             EditorApplication.delayCall += RunAutomaticSetupOnce;
+            EditorApplication.delayCall += RebuildKoreanPrefabForHumanBaseOnce;
+        }
+
+        private static void RebuildKoreanPrefabForHumanBaseOnce()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode ||
+                SessionState.GetBool(HumanBaseMigrationSessionKey, false))
+            {
+                return;
+            }
+
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(JinKoreanModelPath) == null ||
+                AssetDatabase.LoadAssetAtPath<MovePack>(JinKoreanMovePackPath) == null)
+            {
+                Debug.LogWarning("Korean fighter migration is waiting for its model or move pack.");
+                return;
+            }
+
+            RebuildJinKoreanPrefab();
+            SessionState.SetBool(HumanBaseMigrationSessionKey, true);
         }
 
         private static void RunAutomaticSetupOnce()
@@ -47,6 +82,13 @@ namespace FightingGame.EditorTools
             }
 
             SessionState.SetBool(AutoSetupSessionKey, true);
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath) != null &&
+                AssetDatabase.LoadAssetAtPath<GameObject>(JinKoreanPrefabPath) != null &&
+                AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath) != null &&
+                AssetDatabase.LoadAssetAtPath<SceneAsset>(TwoPlayerScenePath) != null)
+            {
+                return;
+            }
             if (AssetDatabase.LoadAssetAtPath<GameObject>(ModelPath) == null)
             {
                 Debug.LogWarning("Jin prototype setup could not find the FBX at: " + ModelPath);
@@ -80,6 +122,7 @@ namespace FightingGame.EditorTools
             Material mouthMaterial = CreateOrUpdateMaterial("Assets/Prototype/Materials/Jin_Mouth.mat", mouthTexture, 0.05f);
             Material groundMaterial = CreateOrUpdateGroundMaterial();
             PrototypeMoveSet moves = CreateOrUpdatePrototypeMoves();
+            GameObject jinKoreanPrefab = CreateOrUpdateJinKoreanPrefab(moves);
 
             Scene scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
             RemoveExisting("Jin Prototype");
@@ -99,7 +142,7 @@ namespace FightingGame.EditorTools
             {
                 jin.AddComponent<JinPrototypeController>();
             }
-            ConfigureMoves(jin, moves);
+            ConfigureMoves(jin, moves.PrototypePack);
 
             GameObject opponent = (GameObject)PrefabUtility.InstantiatePrefab(modelAsset, scene);
             opponent.name = "Prototype Opponent";
@@ -110,7 +153,7 @@ namespace FightingGame.EditorTools
             NormalizeCharacterSizeAndGround(opponent, 1.82f);
 
             JinPrototypeController opponentController = opponent.AddComponent<JinPrototypeController>();
-            ConfigureMoves(opponent, moves);
+            ConfigureMoves(opponent, moves.PrototypePack);
             opponentController.SetPlayerControlled(false);
             opponentController.SetOpponent(jin.transform);
             AddPrototypeHurtbox(opponent);
@@ -145,7 +188,7 @@ namespace FightingGame.EditorTools
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
-            BuildTwoPlayerScene(scene);
+            BuildTwoPlayerScene(scene, jinKoreanPrefab);
             EnsureSceneInBuildSettings(ScenePath);
             EnsureSceneInBuildSettings(TwoPlayerScenePath);
             AssetDatabase.SaveAssets();
@@ -162,7 +205,7 @@ namespace FightingGame.EditorTools
             }
         }
 
-        private static void BuildTwoPlayerScene(Scene sourceScene)
+        private static void BuildTwoPlayerScene(Scene sourceScene, GameObject jinKoreanPrefab)
         {
             if (!EditorSceneManager.SaveScene(sourceScene, TwoPlayerScenePath, true))
             {
@@ -179,6 +222,16 @@ namespace FightingGame.EditorTools
                 Debug.LogError("The copied scene is missing one or more generated prototype objects.");
                 return;
             }
+
+            Object.DestroyImmediate(playerTwo);
+            playerTwo = (GameObject)PrefabUtility.InstantiatePrefab(jinKoreanPrefab, twoPlayerScene);
+            playerTwo.name = "jin_but_korean";
+            Vector3 playerTwoPosition = playerTwo.transform.position;
+            playerTwoPosition.x = 2.6f;
+            playerTwoPosition.z = 0f;
+            playerTwo.transform.SetPositionAndRotation(
+                playerTwoPosition,
+                Quaternion.LookRotation(Vector3.left, Vector3.up));
 
             JinPrototypeController playerOneController = playerOne.GetComponent<JinPrototypeController>();
             JinPrototypeController playerTwoController = playerTwo.GetComponent<JinPrototypeController>();
@@ -219,6 +272,237 @@ namespace FightingGame.EditorTools
 
             EditorSceneManager.MarkSceneDirty(twoPlayerScene);
             EditorSceneManager.SaveScene(twoPlayerScene);
+        }
+
+        [MenuItem("Tools/Jin Prototype/Rebuild Korean Fighter Prefab")]
+        public static void RebuildJinKoreanPrefab()
+        {
+            AssetDatabase.ImportAsset(JinKoreanModelPath, ImportAssetOptions.ForceUpdate);
+            PrototypeMoveSet moves = CreateOrUpdatePrototypeMoves();
+            GameObject prefab = CreateOrUpdateJinKoreanPrefab(moves);
+            if (prefab == null)
+            {
+                throw new System.InvalidOperationException(
+                    "Could not rebuild jin_but_korean from " + JinKoreanModelPath);
+            }
+
+            AssetDatabase.SaveAssets();
+            Debug.Log("Rebuilt jin_but_korean using " + JinKoreanModelPath);
+        }
+
+        private static GameObject CreateOrUpdateJinKoreanPrefab(PrototypeMoveSet moves)
+        {
+            EnsureFolder("Assets/Prototype/Animations");
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(JinKoreanModelPath) == null)
+            {
+                Debug.LogError("Could not find the jin_but_korean model at: " + JinKoreanModelPath);
+                return null;
+            }
+            EnsureHumanoidModelAndGetAvatar(JinKoreanModelPath);
+            AnimationClip idle = EnsureHumanoidClip(JinKoreanIdlePath, true);
+            AnimationClip middleSideKick = EnsureHumanoidClip(MiddleSideKickPath);
+            AnimationClip crescentKick = EnsureHumanoidClip(CrescentKickPath);
+            AnimationClip lowSideKick = EnsureHumanoidClip(LowSideKickPath);
+            AnimationClip axeKick = EnsureHumanoidClip(AxeKickPath);
+            AnimatorController animationController = CreateOrUpdateJinKoreanAnimator(
+                idle, middleSideKick, crescentKick, lowSideKick, axeKick);
+
+            // Korean Jin uses the more complete human_base skeleton. Its imported
+            // materials stay intact; the original Jin textures target a different mesh.
+            GameObject modelAsset = AssetDatabase.LoadAssetAtPath<GameObject>(JinKoreanModelPath);
+            GameObject fighter = (GameObject)PrefabUtility.InstantiatePrefab(modelAsset);
+            fighter.name = "jin_but_korean";
+            fighter.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+            NormalizeCharacterSizeAndGround(fighter, 1.82f);
+
+            JinPrototypeController controller = fighter.GetComponent<JinPrototypeController>();
+            if (controller == null) controller = fighter.AddComponent<JinPrototypeController>();
+            controller.SetPlayerControlled(true);
+            controller.SetControlProfile(PrototypeControlProfile.PlayerTwo);
+            controller.SetShowControlHelp(false);
+            // Imported clips drive Korean Jin's idle and attacks. The procedural
+            // Humanoid pose remains available for locomotion and blocking.
+            controller.SetUseHumanoidProceduralPose(true);
+            ConfigureMoves(fighter, moves.KoreanPack);
+
+            AddPrototypeHurtbox(fighter);
+            fighter.AddComponent<PrototypeDamageHealth>();
+            fighter.AddComponent<PrototypeDummyOpponent>();
+
+            Animator animator = fighter.GetComponentInChildren<Animator>();
+            animator.runtimeAnimatorController = animationController;
+            animator.applyRootMotion = false;
+            animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+
+            PrototypeFighterCombat combat = fighter.GetComponent<PrototypeFighterCombat>();
+            JinKoreanAnimationDriver animationDriver = fighter.AddComponent<JinKoreanAnimationDriver>();
+            animationDriver.Configure(animator, combat, idle);
+
+            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(fighter, JinKoreanPrefabPath);
+            Object.DestroyImmediate(fighter);
+            return prefab;
+        }
+
+        private static Avatar EnsureHumanoidModelAndGetAvatar(string assetPath)
+        {
+            ModelImporter importer = AssetImporter.GetAtPath(assetPath) as ModelImporter;
+            if (importer != null && importer.animationType != ModelImporterAnimationType.Human)
+            {
+                importer.animationType = ModelImporterAnimationType.Human;
+                importer.SaveAndReimport();
+                importer = AssetImporter.GetAtPath(assetPath) as ModelImporter;
+            }
+            if (importer != null && importer.avatarSetup != ModelImporterAvatarSetup.CreateFromThisModel)
+            {
+                importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+                importer.SaveAndReimport();
+            }
+
+            Object[] assets = AssetDatabase.LoadAllAssetsAtPath(assetPath);
+            for (int i = 0; i < assets.Length; i++)
+            {
+                Avatar avatar = assets[i] as Avatar;
+                if (avatar != null) return avatar;
+            }
+
+            Debug.LogError("Could not create a humanoid avatar for jin_but_korean from: " + assetPath);
+            return null;
+        }
+
+        private static AnimationClip EnsureHumanoidClip(string assetPath, bool loopTime = false)
+        {
+            ModelImporter importer = AssetImporter.GetAtPath(assetPath) as ModelImporter;
+            if (importer != null)
+            {
+                if (importer.animationType != ModelImporterAnimationType.Human)
+                {
+                    importer.animationType = ModelImporterAnimationType.Human;
+                    importer.SaveAndReimport();
+                    importer = AssetImporter.GetAtPath(assetPath) as ModelImporter;
+                }
+                if (importer.avatarSetup != ModelImporterAvatarSetup.CreateFromThisModel)
+                {
+                    importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+                    importer.SaveAndReimport();
+                    importer = AssetImporter.GetAtPath(assetPath) as ModelImporter;
+                }
+
+                // These animation-only FBXs use hips/spine/etc. Their metadata may
+                // retain Jin's root-hips mapping from an earlier copy-avatar import,
+                // which prevents Unity from creating an Avatar or exposing a clip.
+                HumanDescription description = importer.humanDescription;
+                if (!HasHumanBoneMapping(description, "Hips", "hips"))
+                {
+                    importer.autoGenerateAvatarMappingIfUnspecified = true;
+                    importer.humanDescription = new HumanDescription
+                    {
+                        human = new HumanBone[0],
+                        skeleton = new SkeletonBone[0],
+                        upperArmTwist = 0.5f,
+                        lowerArmTwist = 0.5f,
+                        upperLegTwist = 0.5f,
+                        lowerLegTwist = 0.5f,
+                        armStretch = 0.05f,
+                        legStretch = 0.05f,
+                        feetSpacing = 0f,
+                        hasTranslationDoF = false
+                    };
+                    importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+                    importer.SaveAndReimport();
+                    importer = AssetImporter.GetAtPath(assetPath) as ModelImporter;
+                }
+
+                bool changed = false;
+                ModelImporterClipAnimation[] clips = importer.defaultClipAnimations;
+                for (int i = 0; i < clips.Length; i++)
+                {
+                    ModelImporterClipAnimation clip = clips[i];
+                    if (!clip.lockRootRotation || !clip.lockRootHeightY || !clip.lockRootPositionXZ ||
+                        clip.loopTime != loopTime)
+                    {
+                        clip.lockRootRotation = true;
+                        clip.lockRootHeightY = true;
+                        clip.lockRootPositionXZ = true;
+                        clip.loopTime = loopTime;
+                        changed = true;
+                    }
+                }
+
+                if (changed)
+                {
+                    importer.clipAnimations = clips;
+                    importer.SaveAndReimport();
+                }
+            }
+
+            Object[] assets = AssetDatabase.LoadAllAssetsAtPath(assetPath);
+            for (int i = 0; i < assets.Length; i++)
+            {
+                AnimationClip clip = assets[i] as AnimationClip;
+                if (clip != null && !clip.name.StartsWith("__preview__")) return clip;
+            }
+
+            Debug.LogError("Could not load an animation clip from: " + assetPath);
+            return null;
+        }
+
+        private static bool HasHumanBoneMapping(
+            HumanDescription description,
+            string humanName,
+            string boneName)
+        {
+            if (description.human == null) return false;
+            for (int i = 0; i < description.human.Length; i++)
+            {
+                HumanBone bone = description.human[i];
+                if (bone.humanName == humanName && bone.boneName == boneName) return true;
+            }
+            return false;
+        }
+
+        private static AnimatorController CreateOrUpdateJinKoreanAnimator(
+            AnimationClip idleClip,
+            AnimationClip middleSideKick,
+            AnimationClip crescentKick,
+            AnimationClip lowSideKick,
+            AnimationClip axeKick)
+        {
+            AnimatorController controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(JinKoreanControllerPath);
+            if (controller == null)
+            {
+                controller = AnimatorController.CreateAnimatorControllerAtPath(JinKoreanControllerPath);
+            }
+
+            AnimatorStateMachine stateMachine = controller.layers[0].stateMachine;
+            AnimatorState idle = GetOrCreateState(stateMachine, "Idle");
+            idle.motion = idleClip;
+            stateMachine.defaultState = idle;
+            GetOrCreateState(stateMachine, JinKoreanAnimationDriver.MiddleSideKickState).motion = middleSideKick;
+            GetOrCreateState(stateMachine, JinKoreanAnimationDriver.CrescentKickState).motion = crescentKick;
+            GetOrCreateState(stateMachine, JinKoreanAnimationDriver.LowSideKickState).motion = lowSideKick;
+            GetOrCreateState(stateMachine, JinKoreanAnimationDriver.AxeKickState).motion = axeKick;
+            EditorUtility.SetDirty(controller);
+            return controller;
+        }
+
+        private static AnimatorState GetOrCreateState(AnimatorStateMachine stateMachine, string stateName)
+        {
+            ChildAnimatorState[] states = stateMachine.states;
+            for (int i = 0; i < states.Length; i++)
+            {
+                if (states[i].state.name == stateName) return states[i].state;
+            }
+            return stateMachine.AddState(stateName);
+        }
+
+        private static void EnsureFolder(string folderPath)
+        {
+            if (AssetDatabase.IsValidFolder(folderPath)) return;
+            int slash = folderPath.LastIndexOf('/');
+            string parent = folderPath.Substring(0, slash);
+            string name = folderPath.Substring(slash + 1);
+            EnsureFolder(parent);
+            AssetDatabase.CreateFolder(parent, name);
         }
 
         private static void AddPrototypeHurtbox(GameObject character)
@@ -318,6 +602,8 @@ namespace FightingGame.EditorTools
                 "Prototype_StepTeep", "step_teep", "Stepping Teep", "ForwardHeld+Back,Neutral,Forward",
                 14, 14, 15, 18, HitLevel.Mid, KnockdownType.HardKnockdown,
                 new Vector3(0f, 0.94f, 0.88f), new Vector3(0.11f, 0.21f, 0.34f));
+            set.PrototypePack = AssetDatabase.LoadAssetAtPath<MovePack>(PrototypeMovePackPath);
+            set.KoreanPack = AssetDatabase.LoadAssetAtPath<MovePack>(JinKoreanMovePackPath);
             return set;
         }
 
@@ -337,15 +623,34 @@ namespace FightingGame.EditorTools
         {
             string path = MovesFolder + "/" + assetName + ".asset";
             MoveDefinition move = AssetDatabase.LoadAssetAtPath<MoveDefinition>(path);
-            if (move == null)
-            {
-                move = ScriptableObject.CreateInstance<MoveDefinition>();
-                AssetDatabase.CreateAsset(move, path);
-            }
+            if (move != null) return move;
+
+            move = ScriptableObject.CreateInstance<MoveDefinition>();
+            AssetDatabase.CreateAsset(move, path);
 
             move.moveId = moveId;
             move.displayName = displayName;
             move.inputCommand = inputCommand;
+            MoveInputToken token = MoveInputToken.AttackForward;
+            if (moveId == "high_kick") token = MoveInputToken.AttackUp;
+            else if (moveId == "low_kick") token = MoveInputToken.AttackDown;
+            bool isStepTeep = moveId == "step_teep";
+            move.command = isStepTeep
+                ? new MoveCommand
+                {
+                    requireForwardHeld = true,
+                    priority = 10,
+                    steps = new[]
+                    {
+                        new MoveCommandStep { token = MoveInputToken.AttackBack, maxDelayFrames = 25 },
+                        new MoveCommandStep { token = MoveInputToken.Neutral, maxDelayFrames = 25 },
+                        new MoveCommandStep { token = MoveInputToken.AttackForward, maxDelayFrames = 25 }
+                    }
+                }
+                : new MoveCommand
+                {
+                    steps = new[] { new MoveCommandStep { token = token, maxDelayFrames = 25 } }
+                };
             move.requiredFighterStates = new[]
             {
                 FighterState.Idle,
@@ -356,6 +661,12 @@ namespace FightingGame.EditorTools
             move.startupFrames = startupFrames;
             move.activeFrames = activeFrames;
             move.recoveryFrames = recoveryFrames;
+            if (isStepTeep)
+            {
+                move.movementStartFrame = 0;
+                move.movementEndFrame = Mathf.Min(28, move.TotalFrames - 1);
+                move.forwardMovementSpeed = 2.4f;
+            }
             move.damage = damage;
             move.chipDamage = 0;
             move.defaultHitLevel = hitLevel;
@@ -377,11 +688,36 @@ namespace FightingGame.EditorTools
             return move;
         }
 
-        private static void ConfigureMoves(GameObject fighter, PrototypeMoveSet moves)
+        private static void ConfigureMoves(GameObject fighter, MovePack movePack)
         {
+            FighterRig rig = fighter.GetComponent<FighterRig>();
+            if (rig == null) rig = fighter.AddComponent<FighterRig>();
+            if (movePack != null && movePack.fighterId == "jin_prototype")
+            {
+                rig.SetCustomBindings(new[]
+                {
+                    new HitboxAnchorBinding { anchor = HitboxAnchor.LeftHand, transformName = "arm left wrist" },
+                    new HitboxAnchorBinding { anchor = HitboxAnchor.RightHand, transformName = "arm right wrist" },
+                    new HitboxAnchorBinding { anchor = HitboxAnchor.LeftFoot, transformName = "leg left toe" },
+                    new HitboxAnchorBinding { anchor = HitboxAnchor.RightFoot, transformName = "leg right toe" }
+                });
+            }
+            else if (movePack != null && movePack.fighterId == "jin_but_korean")
+            {
+                rig.SetCustomBindings(new[]
+                {
+                    new HitboxAnchorBinding { anchor = HitboxAnchor.Hips, transformName = "hips" },
+                    new HitboxAnchorBinding { anchor = HitboxAnchor.Chest, transformName = "chest" },
+                    new HitboxAnchorBinding { anchor = HitboxAnchor.Head, transformName = "head" },
+                    new HitboxAnchorBinding { anchor = HitboxAnchor.LeftHand, transformName = "hand.L" },
+                    new HitboxAnchorBinding { anchor = HitboxAnchor.RightHand, transformName = "hand.R" },
+                    new HitboxAnchorBinding { anchor = HitboxAnchor.LeftFoot, transformName = "toes.L" },
+                    new HitboxAnchorBinding { anchor = HitboxAnchor.RightFoot, transformName = "toes.R" }
+                });
+            }
             PrototypeFighterCombat combat = fighter.GetComponent<PrototypeFighterCombat>();
             if (combat == null) combat = fighter.AddComponent<PrototypeFighterCombat>();
-            combat.ConfigureMoves(moves.Punch, moves.HighKick, moves.LowKick, moves.Teep);
+            combat.ConfigureMovePack(movePack);
         }
 
         private static Material CreateOrUpdateMaterial(string path, Texture2D texture, float smoothness)

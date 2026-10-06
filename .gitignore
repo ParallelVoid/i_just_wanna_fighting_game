@@ -111,3 +111,5 @@ InitTestScene*.unity*
 /[Aa]ssets/[Ss]ceneDependencyCache*
 
 *.DS_Store
+/Docs/*
+/Docs.meta

@@ -15,7 +15,21 @@ MonoBehaviour:
   moveId: step_teep
   displayName: Stepping Teep
   inputCommand: ForwardHeld+Back,Neutral,Forward
+  command:
+    steps:
+    - token: 2
+      maxDelayFrames: 25
+    - token: 0
+      maxDelayFrames: 25
+    - token: 1
+      maxDelayFrames: 25
+    priority: 10
+    requireForwardHeld: 1
   requiredFighterStates: 00000000010000000200000003000000i
+  moveKind: 0
+  movementStartFrame: 0
+  movementEndFrame: 28
+  forwardMovementSpeed: 2.4
   startupFrames: 14
   activeFrames: 14
   recoveryFrames: 15
@@ -41,6 +55,8 @@ MonoBehaviour:
   - label: step_teep
     shape: 2
     size: {x: 0.11, y: 0.21, z: 0.34}
+    anchor: 0
+    customAnchorName: ''
     attachedBoneName: 
     localPosition: {x: 0, y: 0.94, z: 0.88}
     localEulerRotation: {x: 0, y: 0, z: 0}
@@ -50,6 +66,7 @@ MonoBehaviour:
     hitPriority: 0
     damageOverride: -1
     hitstunOverride: -1
+  animationClip: {fileID: 0}
   animationStateName: SteppingTeep
   soundEvents: []
   effectEvents: []

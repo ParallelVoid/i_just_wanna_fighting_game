@@ -22,12 +22,25 @@ namespace Combat
         public string displayName = "New Move";
 
         [Header("Input")]
-        [Tooltip("The command that triggers this move, e.g. \"AttackRight\", \"Back,Neutral,Forward+MoveHeld\". " +
-                 "Free-text for now; can be replaced with a structured command asset later.")]
+        [Tooltip("Human-readable command label. Runtime matching uses Structured Command below.")]
         public string inputCommand = "";
+
+        [Tooltip("Structured command consumed by the input buffer. The text field above is display-only.")]
+        public MoveCommand command = new MoveCommand();
 
         [Tooltip("Fighter states this move is legal to start from. Empty = only Idle/Walk/Sidestep/Run.")]
         public FighterState[] requiredFighterStates = { FighterState.Idle, FighterState.Walk };
+
+        [Header("Move behavior")]
+        public MoveKind moveKind = MoveKind.Strike;
+
+        [Header("Authored movement")]
+        [Tooltip("First move frame that applies forward travel.")]
+        [Min(0)] public int movementStartFrame;
+        [Tooltip("Last move frame that applies forward travel. Inclusive.")]
+        [Min(0)] public int movementEndFrame;
+        [Tooltip("Peak forward speed in world units per second. Zero disables authored movement.")]
+        public float forwardMovementSpeed;
 
         [Header("Frame data (simulation frames, 60 Hz)")]
         [Min(0)] public int startupFrames = 6;
@@ -81,8 +94,10 @@ namespace Combat
         public List<HitboxDefinition> hitboxes = new List<HitboxDefinition>();
 
         [Header("Presentation references")]
-        [Tooltip("Animation clip or state name played for this move. Kept as a name/reference, " +
-                 "not a hard AnimationClip link, so presentation can swap without touching combat data.")]
+        [Tooltip("Fighter-specific animation clip. Leave empty for procedural or Animator-state presentation.")]
+        public AnimationClip animationClip;
+
+        [Tooltip("Optional Animator state name for presentation systems that do not use Animation Clip.")]
         public string animationStateName = "";
 
         public List<TimedEvent> soundEvents = new List<TimedEvent>();
@@ -118,6 +133,16 @@ namespace Combat
             if (activeFrames <= 0)
                 errors.Add($"'{displayName}': activeFrames must be at least 1.");
 
+            if (command == null || command.steps == null || command.steps.Length == 0)
+                errors.Add($"'{displayName}': has no structured input command.");
+
+            if (!Mathf.Approximately(forwardMovementSpeed, 0f) &&
+                (movementEndFrame < movementStartFrame || movementEndFrame >= TotalFrames))
+            {
+                errors.Add($"'{displayName}': movement window [{movementStartFrame}, {movementEndFrame}] " +
+                           $"falls outside total frames 0-{TotalFrames - 1}.");
+            }
+
             if (cancelCategories != CancelCategory.None)
             {
                 if (cancelWindowEndFrame < cancelWindowStartFrame)
@@ -129,7 +154,7 @@ namespace Combat
                                $"{cancelWindowEndFrame}] falls outside the move's total frames (0-{TotalFrames}).");
             }
 
-            if (hitboxes.Count == 0 && defaultHitLevel != HitLevel.Throw)
+            if (hitboxes.Count == 0 && moveKind == MoveKind.Strike)
             {
                 errors.Add($"'{displayName}': has no hitbox timeline entries. " +
                            "A move with no hitboxes can never hit anything.");
@@ -137,6 +162,10 @@ namespace Combat
 
             foreach (var hb in hitboxes)
             {
+                if (hb.anchor == HitboxAnchor.Custom && string.IsNullOrWhiteSpace(hb.customAnchorName))
+                {
+                    errors.Add($"'{displayName}': hitbox '{hb.label}' uses Custom anchor without a name.");
+                }
                 if (!hb.Validate(out string hbError))
                 {
                     errors.Add($"'{displayName}': {hbError}");
@@ -152,6 +181,29 @@ namespace Combat
             }
 
             return errors.Count == 0;
+        }
+
+        public bool AllowsState(FighterState fighterState)
+        {
+            if (requiredFighterStates == null || requiredFighterStates.Length == 0)
+            {
+                return fighterState == FighterState.Idle || fighterState == FighterState.Walk ||
+                       fighterState == FighterState.Sidestep || fighterState == FighterState.Run;
+            }
+            for (int i = 0; i < requiredFighterStates.Length; i++)
+                if (requiredFighterStates[i] == fighterState) return true;
+            return false;
+        }
+
+        public float GetForwardMovementSpeed(int moveFrame)
+        {
+            if (Mathf.Approximately(forwardMovementSpeed, 0f) ||
+                moveFrame < movementStartFrame || moveFrame > movementEndFrame)
+                return 0f;
+
+            int duration = Mathf.Max(1, movementEndFrame - movementStartFrame);
+            float normalized = Mathf.Clamp01((moveFrame - movementStartFrame) / (float)duration);
+            return forwardMovementSpeed * Mathf.Sin(normalized * Mathf.PI);
         }
 
 #if UNITY_EDITOR

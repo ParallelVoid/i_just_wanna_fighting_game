@@ -10,10 +10,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c95f8756e37e44589bed4878e586f311, type: 3}
-  m_Name: Prototype_HighKick
-  m_EditorClassIdentifier: 
-  moveId: high_kick
-  displayName: High Kick
+  m_Name: JinKorean_CrescentKick
+  m_EditorClassIdentifier: ''
+  moveId: jin_korean_crescent_kick
+  displayName: Crescent Kick
   inputCommand: AttackUp
   command:
     steps:
@@ -48,13 +48,13 @@ MonoBehaviour:
   meterGainOnHit: 6
   meterGainOnBlock: 3
   hitboxes:
-  - label: high_kick
+  - label: foot
     shape: 2
     size: {x: 0.13, y: 0.23, z: 0.31}
-    anchor: 0
+    anchor: 7
     customAnchorName: ''
-    attachedBoneName: 
-    localPosition: {x: 0, y: 1.38, z: 0.76}
+    attachedBoneName: ''
+    localPosition: {x: 0, y: 0, z: 0}
     localEulerRotation: {x: 0, y: 0, z: 0}
     startFrame: 10
     endFrame: 21
@@ -62,8 +62,8 @@ MonoBehaviour:
     hitPriority: 0
     damageOverride: -1
     hitstunOverride: -1
-  animationClip: {fileID: 0}
-  animationStateName: HighKick
+  animationClip: {fileID: -5261565134200076865, guid: 3de3847021a704b54b0c67635ce143cc, type: 3}
+  animationStateName: CrescentKick
   soundEvents: []
   effectEvents: []
-  requiredVariationId: 
+  requiredVariationId: ''

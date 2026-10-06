@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3f609870db1f40b1b0a8bb705a31bf02, type: 3}
+  m_Name: Prototype_MovePack
+  m_EditorClassIdentifier: 
+  fighterId: jin_prototype
+  moves:
+  - {fileID: 11400000, guid: 4556d758db98a42ac8976611238d711e, type: 2}
+  - {fileID: 11400000, guid: 63e6dd4a7c3564cbebf1d5df705019e3, type: 2}
+  - {fileID: 11400000, guid: 9bef22211f81c456abda773ef32fab74, type: 2}
+  - {fileID: 11400000, guid: 453d2cb5a339949eeb0e1a7a21dfa938, type: 2}

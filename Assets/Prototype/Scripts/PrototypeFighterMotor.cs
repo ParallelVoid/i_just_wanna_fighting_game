@@ -20,7 +20,6 @@ namespace FightingGame.Prototype
         [SerializeField, Min(1f)] private float runSpeedMultiplier = 1.65f;
         [SerializeField, Min(0.1f)] private float backdashSpeed = 5.4f;
         [SerializeField, Range(0.1f, 0.8f)] private float backdashDuration = 0.32f;
-        [SerializeField, Min(0f)] private float teepStepSpeed = 2.4f;
         [SerializeField, Min(0.1f)] private float stepFrequency = 2.3f;
         [SerializeField, Range(90f, 1080f)] private float postAttackTurnSpeed = 360f;
 
@@ -73,8 +72,7 @@ namespace FightingGame.Prototype
 
         public void Simulate(
             PrototypeInputFrame input,
-            PrototypeAttack attack,
-            float teepStepEnvelope,
+            float authoredForwardSpeed,
             bool movementLocked)
         {
             UpdateAttackFacingLock(movementLocked);
@@ -107,9 +105,9 @@ namespace FightingGame.Prototype
                 currentSpeed = -backdashSpeed * Mathf.Sin(normalizedBackdash * Mathf.PI);
                 currentSideSpeed = Mathf.MoveTowards(currentSideSpeed, 0f, acceleration * CombatClock.StepSeconds);
             }
-            else if (attack == PrototypeAttack.StepTeep)
+            else if (!Mathf.Approximately(authoredForwardSpeed, 0f))
             {
-                currentSpeed = teepStepSpeed * teepStepEnvelope;
+                currentSpeed = authoredForwardSpeed;
                 currentSideSpeed = 0f;
             }
             else

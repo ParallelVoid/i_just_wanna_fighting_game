@@ -4,19 +4,17 @@ using UnityEngine;
 
 namespace FightingGame.Prototype
 {
-    public enum PrototypeAttack { None, StraightPunch, HighKick, LowKick, StepTeep }
-
     /// <summary>Recognizes prototype commands and executes frame-authored move data.</summary>
     [DisallowMultipleComponent]
     public sealed class PrototypeFighterCombat : MonoBehaviour
     {
 
         [Header("Move definitions")]
-        [SerializeField] private MoveDefinition straightPunch;
-        [SerializeField] private MoveDefinition highKick;
-        [SerializeField] private MoveDefinition lowKick;
-        [SerializeField] private MoveDefinition stepTeep;
-        [SerializeField, Range(0.15f, 0.8f)] private float teepSequenceWindow = 0.42f;
+        [SerializeField] private MovePack movePack;
+        [SerializeField, HideInInspector] private MoveDefinition straightPunch;
+        [SerializeField, HideInInspector] private MoveDefinition highKick;
+        [SerializeField, HideInInspector] private MoveDefinition lowKick;
+        [SerializeField, HideInInspector] private MoveDefinition stepTeep;
 
         [Header("Hitbox prototype")]
         [SerializeField] private bool showHitboxes = true;
@@ -28,6 +26,7 @@ namespace FightingGame.Prototype
         private readonly List<HitVolumeShape> hitboxVisualShapes = new List<HitVolumeShape>();
         private readonly Dictionary<string, Transform> boneCache = new Dictionary<string, Transform>();
         private readonly List<MoveDefinition> runtimeMoves = new List<MoveDefinition>();
+        private readonly List<BufferedMoveInput> inputBuffer = new List<BufferedMoveInput>();
         private Transform opponentTarget;
         private PrototypeDamageHealth opponentHealth;
         private PrototypeDummyOpponent opponentDummy;
@@ -35,15 +34,16 @@ namespace FightingGame.Prototype
         private PrototypeRingOutReset matchFlow;
         private PrototypeControlProfile controlProfile;
         private MoveDefinition currentMove;
-        private double teepBackInputTime = -10f;
         private bool attackDirectionHeld;
         private bool attackConnected;
         private Material hitboxMaterial;
+        private FighterRig fighterRig;
+        private MovePack runtimeMovePack;
+        private long localInputFrame;
 
-        public PrototypeAttack CurrentAttack { get; private set; }
         public MoveDefinition CurrentMove { get { return currentMove; } }
         public int CurrentMoveFrame { get; private set; }
-        public bool IsAttacking { get { return CurrentAttack != PrototypeAttack.None && currentMove != null; } }
+        public bool IsAttacking { get { return currentMove != null; } }
         public bool AttackConnected { get { return attackConnected; } }
         public bool LastHitWasBlocked { get; private set; }
         public bool OccupiedThisFrame { get; private set; }
@@ -60,14 +60,11 @@ namespace FightingGame.Prototype
             }
         }
 
-        public float TeepStepEnvelope
+        public float CurrentForwardMovementSpeed
         {
             get
             {
-                if (CurrentAttack != PrototypeAttack.StepTeep || currentMove == null || currentMove.TotalFrames <= 0)
-                    return 0f;
-                float time = Mathf.Clamp01(GetFractionalMoveFrame() / currentMove.TotalFrames);
-                return time < 0.68f ? Mathf.Sin((time / 0.68f) * Mathf.PI) : 0f;
+                return currentMove != null ? currentMove.GetForwardMovementSpeed(CurrentMoveFrame) : 0f;
             }
         }
 
@@ -76,6 +73,8 @@ namespace FightingGame.Prototype
             matchFlow = FindObjectOfType<PrototypeRingOutReset>();
             EnsureMoveDefinitions();
             CacheBones();
+            fighterRig = GetComponent<FighterRig>();
+            if (fighterRig == null) fighterRig = gameObject.AddComponent<FighterRig>();
         }
 
         public void Configure(Transform opponent, PrototypeControlProfile profile)
@@ -90,7 +89,14 @@ namespace FightingGame.Prototype
             highKick = high;
             lowKick = low;
             stepTeep = teep;
+            EnsureLegacyCommand(straightPunch, MoveInputToken.AttackForward);
+            EnsureLegacyCommand(highKick, MoveInputToken.AttackUp);
+            EnsureLegacyCommand(lowKick, MoveInputToken.AttackDown);
+            EnsureLegacyCommand(stepTeep, MoveInputToken.AttackForward);
+            BuildLegacyMovePack();
         }
+
+        public void ConfigureMovePack(MovePack pack) { movePack = pack; }
 
         public void SetOpponent(Transform opponent)
         {
@@ -104,11 +110,11 @@ namespace FightingGame.Prototype
 
         public void ResetRuntimeState()
         {
-            CurrentAttack = PrototypeAttack.None;
             currentMove = null;
             CurrentMoveFrame = 0;
-            teepBackInputTime = -10f;
             attackDirectionHeld = false;
+            inputBuffer.Clear();
+            localInputFrame = 0;
             attackConnected = false;
             LastHitWasBlocked = false;
             OccupiedThisFrame = false;
@@ -122,6 +128,7 @@ namespace FightingGame.Prototype
             FighterState fighterState)
         {
             EnsureMoveDefinitions();
+            localInputFrame++;
             OccupiedThisFrame = IsAttacking;
             if (acceptAttackInput) UpdateAttackInput(forwardHeld, attackDirection, fighterState);
             OccupiedThisFrame |= IsAttacking;
@@ -162,27 +169,36 @@ namespace FightingGame.Prototype
         private void UpdateAttackInput(bool forwardHeld, Vector2 direction, FighterState fighterState)
         {
             bool active = direction.sqrMagnitude >= 0.36f;
-            if (CombatClock.TimeSeconds - teepBackInputTime > teepSequenceWindow) teepBackInputTime = -10f;
-            if (!active) { attackDirectionHeld = false; return; }
+            if (!active)
+            {
+                if (attackDirectionHeld) BufferInput(MoveInputToken.Neutral);
+                attackDirectionHeld = false;
+                return;
+            }
             if (attackDirectionHeld || IsAttacking) return;
 
             attackDirectionHeld = true;
-            if (forwardHeld && direction.x < -0.45f) { teepBackInputTime = CombatClock.TimeSeconds; return; }
-            if (forwardHeld && direction.x > 0.45f && CombatClock.TimeSeconds - teepBackInputTime <= teepSequenceWindow)
-            {
-                teepBackInputTime = -10f;
-                StartAttack(PrototypeAttack.StepTeep, stepTeep, fighterState);
-                return;
-            }
-            if (direction.y > 0.45f) StartAttack(PrototypeAttack.HighKick, highKick, fighterState);
-            else if (direction.y < -0.45f) StartAttack(PrototypeAttack.LowKick, lowKick, fighterState);
-            else if (direction.x > 0.35f) StartAttack(PrototypeAttack.StraightPunch, straightPunch, fighterState);
+            BufferInput(ToInputToken(direction));
+            MoveDefinition move = movePack != null ? movePack.Resolve(inputBuffer, forwardHeld, fighterState) : null;
+            if (move != null) StartMove(move);
         }
 
-        private void StartAttack(PrototypeAttack attack, MoveDefinition definition, FighterState fighterState)
+        private void BufferInput(MoveInputToken token)
         {
-            if (definition == null || definition.TotalFrames <= 0 || !AllowsState(definition, fighterState)) return;
-            CurrentAttack = attack;
+            inputBuffer.Add(new BufferedMoveInput(token, localInputFrame));
+            if (inputBuffer.Count > 12) inputBuffer.RemoveAt(0);
+        }
+
+        private static MoveInputToken ToInputToken(Vector2 direction)
+        {
+            if (Mathf.Abs(direction.y) > Mathf.Abs(direction.x))
+                return direction.y >= 0f ? MoveInputToken.AttackUp : MoveInputToken.AttackDown;
+            return direction.x >= 0f ? MoveInputToken.AttackForward : MoveInputToken.AttackBack;
+        }
+
+        private void StartMove(MoveDefinition definition)
+        {
+            if (definition == null || definition.TotalFrames <= 0) return;
             currentMove = definition;
             CurrentMoveFrame = 0;
             attackConnected = false;
@@ -190,21 +206,8 @@ namespace FightingGame.Prototype
             if (hitboxMaterial != null) hitboxMaterial.color = activeHitboxColor;
         }
 
-        private static bool AllowsState(MoveDefinition definition, FighterState fighterState)
-        {
-            if (definition.requiredFighterStates == null || definition.requiredFighterStates.Length == 0)
-            {
-                return fighterState == FighterState.Idle || fighterState == FighterState.Walk ||
-                       fighterState == FighterState.Sidestep || fighterState == FighterState.Run;
-            }
-            for (int i = 0; i < definition.requiredFighterStates.Length; i++)
-                if (definition.requiredFighterStates[i] == fighterState) return true;
-            return false;
-        }
-
         private void FinishAttack()
         {
-            CurrentAttack = PrototypeAttack.None;
             currentMove = null;
             CurrentMoveFrame = 0;
             SetHitboxVisualCount(0);
@@ -275,7 +278,12 @@ namespace FightingGame.Prototype
         private void GetHitboxPose(HitboxDefinition hitbox, out Vector3 center, out Quaternion rotation)
         {
             Transform attachment = transform;
-            if (!string.IsNullOrEmpty(hitbox.attachedBoneName))
+            if (fighterRig != null)
+            {
+                Transform resolved = fighterRig.Resolve(hitbox.anchor, hitbox.customAnchorName, hitbox.attachedBoneName);
+                if (resolved != null) attachment = resolved;
+            }
+            else if (!string.IsNullOrEmpty(hitbox.attachedBoneName))
             {
                 Transform bone;
                 if (boneCache.TryGetValue(hitbox.attachedBoneName.ToLowerInvariant(), out bone)) attachment = bone;
@@ -341,18 +349,25 @@ namespace FightingGame.Prototype
 
         private void EnsureMoveDefinitions()
         {
+            if (movePack != null) return;
             if (straightPunch == null) straightPunch = CreateRuntimeMove("straight_punch", "Straight Punch", 5, 8, 12, 8,
-                HitLevel.High, KnockdownType.None, new Vector3(0f, 1.25f, 0.72f), new Vector3(0.10f, 0.16f, 0.28f));
+                HitLevel.High, KnockdownType.None, MoveInputToken.AttackForward, false,
+                new Vector3(0f, 1.25f, 0.72f), new Vector3(0.10f, 0.16f, 0.28f));
             if (highKick == null) highKick = CreateRuntimeMove("high_kick", "High Kick", 10, 12, 15, 16,
-                HitLevel.High, KnockdownType.None, new Vector3(0f, 1.38f, 0.76f), new Vector3(0.13f, 0.23f, 0.31f));
+                HitLevel.High, KnockdownType.None, MoveInputToken.AttackUp, false,
+                new Vector3(0f, 1.38f, 0.76f), new Vector3(0.13f, 0.23f, 0.31f));
             if (lowKick == null) lowKick = CreateRuntimeMove("low_kick", "Low Kick", 7, 10, 13, 11,
-                HitLevel.Low, KnockdownType.None, new Vector3(0f, 0.46f, 0.68f), new Vector3(0.16f, 0.15f, 0.32f));
+                HitLevel.Low, KnockdownType.None, MoveInputToken.AttackDown, false,
+                new Vector3(0f, 0.46f, 0.68f), new Vector3(0.16f, 0.15f, 0.32f));
             if (stepTeep == null) stepTeep = CreateRuntimeMove("step_teep", "Stepping Teep", 14, 14, 15, 18,
-                HitLevel.Mid, KnockdownType.HardKnockdown, new Vector3(0f, 0.94f, 0.88f), new Vector3(0.11f, 0.21f, 0.34f));
+                HitLevel.Mid, KnockdownType.HardKnockdown, MoveInputToken.AttackForward, true,
+                new Vector3(0f, 0.94f, 0.88f), new Vector3(0.11f, 0.21f, 0.34f));
+            BuildLegacyMovePack();
         }
 
         private MoveDefinition CreateRuntimeMove(string id, string displayName, int startup, int active, int recovery,
-            int damage, HitLevel hitLevel, KnockdownType knockdown, Vector3 position, Vector3 halfExtents)
+            int damage, HitLevel hitLevel, KnockdownType knockdown, MoveInputToken inputToken,
+            bool usesSequenceAndForwardMovement, Vector3 position, Vector3 halfExtents)
         {
             MoveDefinition move = ScriptableObject.CreateInstance<MoveDefinition>();
             move.hideFlags = HideFlags.DontSave;
@@ -368,6 +383,28 @@ namespace FightingGame.Prototype
             };
             move.defaultHitLevel = hitLevel;
             move.knockdownType = knockdown;
+            if (usesSequenceAndForwardMovement)
+            {
+                move.movementStartFrame = 0;
+                move.movementEndFrame = Mathf.Min(28, move.TotalFrames - 1);
+                move.forwardMovementSpeed = 2.4f;
+            }
+            move.command = usesSequenceAndForwardMovement
+                ? new MoveCommand
+                {
+                    requireForwardHeld = true,
+                    priority = 10,
+                    steps = new[]
+                    {
+                        new MoveCommandStep { token = MoveInputToken.AttackBack, maxDelayFrames = 25 },
+                        new MoveCommandStep { token = MoveInputToken.Neutral, maxDelayFrames = 25 },
+                        new MoveCommandStep { token = MoveInputToken.AttackForward, maxDelayFrames = 25 }
+                    }
+                }
+                : new MoveCommand
+                {
+                    steps = new[] { new MoveCommandStep { token = inputToken, maxDelayFrames = 25 } }
+                };
             move.hitboxes.Add(new HitboxDefinition
             {
                 label = id, shape = HitVolumeShape.Box, size = halfExtents, localPosition = position,
@@ -375,6 +412,34 @@ namespace FightingGame.Prototype
             });
             runtimeMoves.Add(move);
             return move;
+        }
+
+        private void BuildLegacyMovePack()
+        {
+            if (runtimeMovePack == null)
+            {
+                runtimeMovePack = ScriptableObject.CreateInstance<MovePack>();
+                runtimeMovePack.hideFlags = HideFlags.DontSave;
+                runtimeMovePack.fighterId = name + "_runtime";
+            }
+            runtimeMovePack.moves.Clear();
+            if (straightPunch != null) runtimeMovePack.moves.Add(straightPunch);
+            if (highKick != null) runtimeMovePack.moves.Add(highKick);
+            if (lowKick != null) runtimeMovePack.moves.Add(lowKick);
+            if (stepTeep != null) runtimeMovePack.moves.Add(stepTeep);
+            movePack = runtimeMovePack;
+        }
+
+        private static void EnsureLegacyCommand(
+            MoveDefinition move,
+            MoveInputToken token)
+        {
+            if (move == null) return;
+            if (move.command != null && move.command.steps != null && move.command.steps.Length > 0) return;
+            move.command = new MoveCommand
+            {
+                steps = new[] { new MoveCommandStep { token = token, maxDelayFrames = 25 } }
+            };
         }
 
         private static T FindOpponentComponent<T>(Transform target) where T : Component
@@ -391,6 +456,7 @@ namespace FightingGame.Prototype
             for (int i = 0; i < hitboxVisuals.Count; i++) if (hitboxVisuals[i] != null) Destroy(hitboxVisuals[i]);
             if (hitboxMaterial != null) Destroy(hitboxMaterial);
             for (int i = 0; i < runtimeMoves.Count; i++) if (runtimeMoves[i] != null) Destroy(runtimeMoves[i]);
+            if (runtimeMovePack != null) Destroy(runtimeMovePack);
         }
     }
 }
